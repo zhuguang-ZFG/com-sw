@@ -126,3 +126,19 @@ def test_modbus_analysis_view_sorts_numeric_columns() -> None:
 
     view._table.sortItems(4, Qt.AscendingOrder)
     assert view._table.item(0, 4).text() == "20"
+
+
+def test_modbus_analysis_view_updates_stats_for_filtered_entries() -> None:
+    app = QApplication.instance() or QApplication([])
+    view = ModbusAnalysisView()
+    view.add_entry("12:00:00.000", "RX", 1, 0x03, None, "Frame", "normal", False)
+    view.add_entry("12:00:00.100", "RX", 1, 0x03, 100, "Paired Exception", "error", True)
+    view.add_entry("12:00:00.200", "RX", 1, 0x03, 50, "Paired Response", "ok", False)
+
+    assert "Total: 3" in view._stats_label.text()
+    assert "Exceptions: 1" in view._stats_label.text()
+    assert "Paired: 2" in view._stats_label.text()
+    assert "Avg Latency: 75.0 ms" in view._stats_label.text()
+
+    view._exceptions_only_cb.setChecked(True)
+    assert view._stats_label.text() == "Total: 1 | Exceptions: 1 | Paired: 1 | Avg Latency: 100.0 ms"

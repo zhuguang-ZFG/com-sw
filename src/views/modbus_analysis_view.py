@@ -95,6 +95,10 @@ class ModbusAnalysisView(QWidget):
         self._status_label.setStyleSheet("color: #888;")
         layout.addWidget(self._status_label)
 
+        self._stats_label = QLabel("Total: 0 | Exceptions: 0 | Paired: 0 | Avg Latency: n/a")
+        self._stats_label.setStyleSheet("color: #888;")
+        layout.addWidget(self._stats_label)
+
         self._table = QTableWidget()
         self._table.setColumnCount(7)
         self._table.setHorizontalHeaderLabels([
@@ -176,7 +180,18 @@ class ModbusAnalysisView(QWidget):
 
         self._count_label.setText(f"Entries: {len(filtered_entries)}")
         self._status_label.setText("Ready" if filtered_entries else "No matching Modbus analysis entries.")
+        self._update_stats(filtered_entries)
         self._update_detail_panel()
+
+    def _update_stats(self, entries: List[dict]) -> None:
+        total = len(entries)
+        exceptions = sum(1 for entry in entries if entry["highlight"])
+        paired = sum(1 for entry in entries if "Paired" in entry["status"])
+        latencies = [entry["latency_ms"] for entry in entries if entry["latency_ms"] is not None]
+        avg_latency = f"{sum(latencies) / len(latencies):.1f} ms" if latencies else "n/a"
+        self._stats_label.setText(
+            f"Total: {total} | Exceptions: {exceptions} | Paired: {paired} | Avg Latency: {avg_latency}"
+        )
 
     def get_filtered_entries(self) -> List[dict]:
         exception_only = self._exceptions_only_cb.isChecked()
@@ -319,6 +334,7 @@ class ModbusAnalysisView(QWidget):
         self._count_label.setText("Entries: 0")
         self._status_label.setText("No Modbus analysis entries yet.")
         self._status_label.setStyleSheet("color: #888;")
+        self._stats_label.setText("Total: 0 | Exceptions: 0 | Paired: 0 | Avg Latency: n/a")
         self._detail_label.setText("Select an analysis row to inspect raw frame details.")
         self._detail_text.clear()
         self._search_filter.clear()

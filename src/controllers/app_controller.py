@@ -462,6 +462,9 @@ class AppController(QObject):
             show_ascii=self._config.get("display", "dump_show_ascii", default=True),
             font_size=self._config.get("display", "terminal_font_size", default=10),
         )
+        self.main_window.modbus_analysis_view.set_filter_state(
+            self._config.get("modbus_analysis", default={})
+        )
 
     # ---- Export -------------------------------------------------------------------
 
@@ -516,6 +519,12 @@ class AppController(QObject):
         self._port_enumerator.stop()
         if self._is_connected:
             self._port_manager.close()
+        modbus_analysis_state = self.main_window.modbus_analysis_view.get_filter_state()
+        self._config.set("modbus_analysis", "exceptions_only", modbus_analysis_state["exceptions_only"])
+        self._config.set("modbus_analysis", "paired_only", modbus_analysis_state["paired_only"])
+        self._config.set("modbus_analysis", "slave_filter", modbus_analysis_state["slave_filter"])
+        self._config.set("modbus_analysis", "function_filter", modbus_analysis_state["function_filter"])
+        self._config.set("modbus_analysis", "search_filter", modbus_analysis_state["search_filter"])
         self._config.set("window", "geometry",
                          bytes(self.main_window.saveGeometry()).hex())
         self._config.save()

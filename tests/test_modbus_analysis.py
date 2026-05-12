@@ -142,3 +142,25 @@ def test_modbus_analysis_view_updates_stats_for_filtered_entries() -> None:
 
     view._exceptions_only_cb.setChecked(True)
     assert view._stats_label.text() == "Total: 1 | Exceptions: 1 | Paired: 1 | Avg Latency: 100.0 ms"
+
+
+def test_modbus_analysis_view_restores_filter_state() -> None:
+    app = QApplication.instance() or QApplication([])
+    view = ModbusAnalysisView()
+    view.set_filter_state(
+        {
+            "exceptions_only": True,
+            "paired_only": True,
+            "slave_filter": "2",
+            "function_filter": "04",
+            "search_filter": "error",
+        }
+    )
+
+    assert view.get_filter_state() == {
+        "exceptions_only": True,
+        "paired_only": True,
+        "slave_filter": "2",
+        "function_filter": "04",
+        "search_filter": "error",
+    }

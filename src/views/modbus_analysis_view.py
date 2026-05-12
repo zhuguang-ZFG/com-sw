@@ -42,6 +42,7 @@ class ModbusAnalysisView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._entries: List[dict] = []
+        self._restoring_filters = False
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -169,6 +170,27 @@ class ModbusAnalysisView(QWidget):
             return
         self._entries[-1]["raw_hex"] = raw_hex
         self._entries[-1]["exception_code"] = exception_code
+        self._apply_filters()
+
+    def get_filter_state(self) -> dict:
+        return {
+            "exceptions_only": self._exceptions_only_cb.isChecked(),
+            "paired_only": self._paired_only_cb.isChecked(),
+            "slave_filter": self._slave_filter.text(),
+            "function_filter": self._function_filter.text(),
+            "search_filter": self._search_filter.text(),
+        }
+
+    def set_filter_state(self, state: dict) -> None:
+        self._restoring_filters = True
+        try:
+            self._exceptions_only_cb.setChecked(bool(state.get("exceptions_only", False)))
+            self._paired_only_cb.setChecked(bool(state.get("paired_only", False)))
+            self._slave_filter.setText(str(state.get("slave_filter", "")))
+            self._function_filter.setText(str(state.get("function_filter", "")))
+            self._search_filter.setText(str(state.get("search_filter", "")))
+        finally:
+            self._restoring_filters = False
         self._apply_filters()
 
     def _apply_filters(self) -> None:

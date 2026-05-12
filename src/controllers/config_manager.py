@@ -57,6 +57,13 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "last_session_file": "",
         "replay_speed": 1.0,
     },
+    "modbus_analysis": {
+        "exceptions_only": False,
+        "paired_only": False,
+        "slave_filter": "",
+        "function_filter": "",
+        "search_filter": "",
+    },
     "window": {
         "geometry": None,
         "state": None,

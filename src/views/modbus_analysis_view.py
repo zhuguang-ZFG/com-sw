@@ -11,6 +11,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QApplication,
+    QButtonGroup,
     QCheckBox,
     QFileDialog,
     QLineEdit,
@@ -48,6 +49,7 @@ class ModbusAnalysisView(QWidget):
         super().__init__(parent)
         self._entries: List[dict] = []
         self._restoring_filters = False
+        self._status_filter_value = ""
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -85,6 +87,24 @@ class ModbusAnalysisView(QWidget):
         self._search_filter.setMaximumWidth(220)
         self._search_filter.textChanged.connect(self._apply_filters)
         toolbar.addWidget(self._search_filter)
+
+        toolbar.addWidget(QLabel("Status:"))
+        self._status_filter_group = QButtonGroup(self)
+        self._status_filter_group.setExclusive(True)
+        self._status_filter_buttons: dict[str, QPushButton] = {}
+        for label, value in [
+            ("All", ""),
+            ("Frame", "Frame"),
+            ("Response", "Paired Response"),
+            ("Exception", "Paired Exception"),
+        ]:
+            button = QPushButton(label)
+            button.setCheckable(True)
+            button.clicked.connect(lambda checked=False, status_value=value: self._set_status_filter(status_value))
+            toolbar.addWidget(button)
+            self._status_filter_group.addButton(button)
+            self._status_filter_buttons[value] = button
+        self._status_filter_buttons[""].setChecked(True)
 
         toolbar.addStretch()
 
@@ -201,6 +221,7 @@ class ModbusAnalysisView(QWidget):
             "slave_filter": self._slave_filter.text(),
             "function_filter": self._function_filter.text(),
             "search_filter": self._search_filter.text(),
+            "status_filter": self._status_filter_value,
         }
 
     def set_filter_state(self, state: dict) -> None:
@@ -211,9 +232,17 @@ class ModbusAnalysisView(QWidget):
             self._slave_filter.setText(str(state.get("slave_filter", "")))
             self._function_filter.setText(str(state.get("function_filter", "")))
             self._search_filter.setText(str(state.get("search_filter", "")))
+            self._set_status_filter(str(state.get("status_filter", "")), apply_filters=False)
         finally:
             self._restoring_filters = False
         self._apply_filters()
+
+    def _set_status_filter(self, status_value: str, *, apply_filters: bool = True) -> None:
+        self._status_filter_value = status_value
+        button = self._status_filter_buttons.get(status_value, self._status_filter_buttons[""])
+        button.setChecked(True)
+        if apply_filters and not self._restoring_filters:
+            self._apply_filters()
 
     def _apply_filters(self) -> None:
         filtered_entries = self.get_filtered_entries()
@@ -246,6 +275,7 @@ class ModbusAnalysisView(QWidget):
         slave_filter = self._slave_filter.text().strip()
         function_filter = self._function_filter.text().strip().lower().removeprefix("0x")
         search_filter = self._search_filter.text().strip().lower()
+        status_filter = self._status_filter_value
 
         filtered_entries = []
         for entry in self._entries:
@@ -256,6 +286,8 @@ class ModbusAnalysisView(QWidget):
             if slave_filter and str(entry["slave"]) != slave_filter:
                 continue
             if function_filter and f"{entry['function']:02x}" != function_filter:
+                continue
+            if status_filter and entry["status"] != status_filter:
                 continue
             if search_filter:
                 haystack = " ".join([
@@ -491,3 +523,4 @@ class ModbusAnalysisView(QWidget):
         self._detail_label.setText("Select an analysis row to inspect raw frame details.")
         self._detail_text.clear()
         self._search_filter.clear()
+        self._set_status_filter("", apply_filters=False)

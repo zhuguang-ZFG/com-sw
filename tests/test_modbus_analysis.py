@@ -212,6 +212,29 @@ def test_modbus_analysis_view_search_filters_summary_and_raw_hex() -> None:
     assert view._table.item(0, 1).text() == "TX"
 
 
+def test_modbus_analysis_view_status_quick_filters() -> None:
+    app = QApplication.instance() or QApplication([])
+    view = ModbusAnalysisView()
+    view.add_entry("12:00:00.000", "RX", 1, 0x03, None, "Frame", "normal", False)
+    view.add_entry("12:00:00.100", "RX", 1, 0x03, 100, "Paired Exception", "error", True)
+    view.add_entry("12:00:00.200", "RX", 1, 0x03, 50, "Paired Response", "ok", False)
+
+    view._set_status_filter("Paired Response")
+    assert view._table.rowCount() == 1
+    assert view._table.item(0, 5).text() == "Paired Response"
+
+    view._set_status_filter("Paired Exception")
+    assert view._table.rowCount() == 1
+    assert view._table.item(0, 5).text() == "Paired Exception"
+
+    view._set_status_filter("Frame")
+    assert view._table.rowCount() == 1
+    assert view._table.item(0, 5).text() == "Frame"
+
+    view._set_status_filter("")
+    assert view._table.rowCount() == 3
+
+
 def test_modbus_analysis_view_sorts_numeric_columns() -> None:
     app = QApplication.instance() or QApplication([])
     view = ModbusAnalysisView()
@@ -256,6 +279,7 @@ def test_modbus_analysis_view_restores_filter_state() -> None:
             "slave_filter": "2",
             "function_filter": "04",
             "search_filter": "error",
+            "status_filter": "Paired Exception",
         }
     )
 
@@ -265,4 +289,5 @@ def test_modbus_analysis_view_restores_filter_state() -> None:
         "slave_filter": "2",
         "function_filter": "04",
         "search_filter": "error",
+        "status_filter": "Paired Exception",
     }

@@ -9,6 +9,7 @@ from typing import List
 
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QFileDialog,
     QLineEdit,
@@ -91,6 +92,10 @@ class ModbusAnalysisView(QWidget):
         export_json_btn = QPushButton("Export JSON")
         export_json_btn.clicked.connect(self._export_json)
         toolbar.addWidget(export_json_btn)
+
+        copy_json_btn = QPushButton("Copy JSON")
+        copy_json_btn.clicked.connect(self._copy_selected_json)
+        toolbar.addWidget(copy_json_btn)
 
         clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(self.clear)
@@ -290,25 +295,38 @@ class ModbusAnalysisView(QWidget):
 
     def export_json(self, file_path: str) -> None:
         entries = self.get_filtered_entries()
-        payload = []
-        for entry in entries:
-            payload.append({
-                "timestamp": entry["timestamp"],
-                "direction": entry["direction"],
-                "slave": entry["slave"],
-                "function": f"0x{entry['function']:02X}",
-                "latency_ms": entry["latency_ms"],
-                "status": entry["status"],
-                "summary": entry["summary"],
-                "exception_code": None if entry.get("exception_code") is None else f"0x{entry['exception_code']:02X}",
-                "raw_hex": entry.get("raw_hex", ""),
-                "highlight": entry["highlight"],
-            })
+        payload = [self._serialize_entry(entry) for entry in entries]
 
         path = Path(file_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", encoding="utf-8") as handle:
             json.dump(payload, handle, indent=2, ensure_ascii=False)
+
+    def _serialize_entry(self, entry: dict) -> dict:
+        return {
+            "timestamp": entry["timestamp"],
+            "direction": entry["direction"],
+            "slave": entry["slave"],
+            "function": f"0x{entry['function']:02X}",
+            "latency_ms": entry["latency_ms"],
+            "status": entry["status"],
+            "summary": entry["summary"],
+            "exception_code": None if entry.get("exception_code") is None else f"0x{entry['exception_code']:02X}",
+            "raw_hex": entry.get("raw_hex", ""),
+            "highlight": entry["highlight"],
+        }
+
+    def copy_selected_json(self) -> bool:
+        row = self._table.currentRow()
+        if row < 0:
+            return False
+        filtered_entries = self.get_filtered_entries()
+        if row >= len(filtered_entries):
+            return False
+        payload = self._serialize_entry(filtered_entries[row])
+        clipboard = QApplication.clipboard()
+        clipboard.setText(json.dumps(payload, indent=2, ensure_ascii=False))
+        return True
 
     def _export_csv(self) -> None:
         default_path = str(Path.home() / "Documents" / "com-sw-modbus-analysis.csv")
@@ -340,6 +358,14 @@ class ModbusAnalysisView(QWidget):
             file_path += ".json"
         self.export_json(file_path)
         self._status_label.setText(f"Exported analysis to {file_path}")
+        self._status_label.setStyleSheet("color: #888;")
+
+    def _copy_selected_json(self) -> None:
+        if self.copy_selected_json():
+            self._status_label.setText("Copied selected analysis as JSON")
+            self._status_label.setStyleSheet("color: #888;")
+            return
+        self._status_label.setText("No analysis row selected to copy")
         self._status_label.setStyleSheet("color: #888;")
 
     def _append_table_row(self, entry: dict) -> None:

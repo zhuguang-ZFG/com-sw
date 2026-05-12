@@ -108,6 +108,32 @@ def test_modbus_analysis_view_exports_filtered_entries_to_json(tmp_path: Path) -
     assert content[0]["highlight"] is True
 
 
+def test_modbus_analysis_view_copies_selected_entry_as_json() -> None:
+    app = QApplication.instance() or QApplication([])
+    view = ModbusAnalysisView()
+    view.add_entry("12:00:00.100", "RX", 2, 0x04, 100, "Paired Exception", "error", True)
+    view.add_entry_details("02 84 02", 0x02)
+
+    view._table.selectRow(0)
+    assert view.copy_selected_json() is True
+
+    payload = json.loads(app.clipboard().text())
+    assert payload["timestamp"] == "12:00:00.100"
+    assert payload["function"] == "0x04"
+    assert payload["exception_code"] == "0x02"
+    assert payload["raw_hex"] == "02 84 02"
+    assert payload["highlight"] is True
+
+
+def test_modbus_analysis_view_copy_selected_json_without_selection() -> None:
+    app = QApplication.instance() or QApplication([])
+    view = ModbusAnalysisView()
+    app.clipboard().setText("")
+
+    assert view.copy_selected_json() is False
+    assert app.clipboard().text() == ""
+
+
 def test_modbus_analysis_view_shows_selected_entry_details() -> None:
     app = QApplication.instance() or QApplication([])
     view = ModbusAnalysisView()

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import csv
+from pathlib import Path
 from typing import List
 
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QCheckBox,
+    QFileDialog,
     QLineEdit,
     QHBoxLayout,
     QHeaderView,
@@ -57,6 +60,10 @@ class ModbusAnalysisView(QWidget):
         toolbar.addWidget(self._function_filter)
 
         toolbar.addStretch()
+
+        export_btn = QPushButton("Export CSV")
+        export_btn.clicked.connect(self._export_csv)
+        toolbar.addWidget(export_btn)
 
         clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(self.clear)
@@ -142,6 +149,59 @@ class ModbusAnalysisView(QWidget):
 
         self._count_label.setText(f"Entries: {len(filtered_entries)}")
         self._status_label.setText("Ready" if filtered_entries else "No matching Modbus analysis entries.")
+
+    def get_filtered_entries(self) -> List[dict]:
+        exception_only = self._exceptions_only_cb.isChecked()
+        paired_only = self._paired_only_cb.isChecked()
+        slave_filter = self._slave_filter.text().strip()
+        function_filter = self._function_filter.text().strip().lower().removeprefix("0x")
+
+        filtered_entries = []
+        for entry in self._entries:
+            if exception_only and not entry["highlight"]:
+                continue
+            if paired_only and "Paired" not in entry["status"]:
+                continue
+            if slave_filter and str(entry["slave"]) != slave_filter:
+                continue
+            if function_filter and f"{entry['function']:02x}" != function_filter:
+                continue
+            filtered_entries.append(entry)
+        return filtered_entries
+
+    def export_csv(self, file_path: str) -> None:
+        entries = self.get_filtered_entries()
+        path = Path(file_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["timestamp", "direction", "slave", "function", "latency_ms", "status", "summary"])
+            for entry in entries:
+                writer.writerow([
+                    entry["timestamp"],
+                    entry["direction"],
+                    entry["slave"],
+                    f"0x{entry['function']:02X}",
+                    "" if entry["latency_ms"] is None else entry["latency_ms"],
+                    entry["status"],
+                    entry["summary"],
+                ])
+
+    def _export_csv(self) -> None:
+        default_path = str(Path.home() / "Documents" / "com-sw-modbus-analysis.csv")
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Modbus Analysis",
+            default_path,
+            "CSV files (*.csv)",
+        )
+        if not file_path:
+            return
+        if not file_path.lower().endswith(".csv"):
+            file_path += ".csv"
+        self.export_csv(file_path)
+        self._status_label.setText(f"Exported analysis to {file_path}")
+        self._status_label.setStyleSheet("color: #888;")
 
     def _append_table_row(self, entry: dict) -> None:
         row = self._table.rowCount()

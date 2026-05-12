@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 from typing import List
 
@@ -86,6 +87,10 @@ class ModbusAnalysisView(QWidget):
         export_btn = QPushButton("Export CSV")
         export_btn.clicked.connect(self._export_csv)
         toolbar.addWidget(export_btn)
+
+        export_json_btn = QPushButton("Export JSON")
+        export_json_btn.clicked.connect(self._export_json)
+        toolbar.addWidget(export_json_btn)
 
         clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(self.clear)
@@ -283,6 +288,28 @@ class ModbusAnalysisView(QWidget):
                     entry.get("raw_hex", ""),
                 ])
 
+    def export_json(self, file_path: str) -> None:
+        entries = self.get_filtered_entries()
+        payload = []
+        for entry in entries:
+            payload.append({
+                "timestamp": entry["timestamp"],
+                "direction": entry["direction"],
+                "slave": entry["slave"],
+                "function": f"0x{entry['function']:02X}",
+                "latency_ms": entry["latency_ms"],
+                "status": entry["status"],
+                "summary": entry["summary"],
+                "exception_code": None if entry.get("exception_code") is None else f"0x{entry['exception_code']:02X}",
+                "raw_hex": entry.get("raw_hex", ""),
+                "highlight": entry["highlight"],
+            })
+
+        path = Path(file_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, ensure_ascii=False)
+
     def _export_csv(self) -> None:
         default_path = str(Path.home() / "Documents" / "com-sw-modbus-analysis.csv")
         file_path, _ = QFileDialog.getSaveFileName(
@@ -296,6 +323,22 @@ class ModbusAnalysisView(QWidget):
         if not file_path.lower().endswith(".csv"):
             file_path += ".csv"
         self.export_csv(file_path)
+        self._status_label.setText(f"Exported analysis to {file_path}")
+        self._status_label.setStyleSheet("color: #888;")
+
+    def _export_json(self) -> None:
+        default_path = str(Path.home() / "Documents" / "com-sw-modbus-analysis.json")
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Modbus Analysis",
+            default_path,
+            "JSON files (*.json)",
+        )
+        if not file_path:
+            return
+        if not file_path.lower().endswith(".json"):
+            file_path += ".json"
+        self.export_json(file_path)
         self._status_label.setText(f"Exported analysis to {file_path}")
         self._status_label.setStyleSheet("color: #888;")
 

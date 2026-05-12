@@ -1,6 +1,7 @@
 """Tests for Modbus analysis helpers."""
 
 from datetime import datetime
+import json
 from pathlib import Path
 
 from PySide6.QtCore import Qt
@@ -84,6 +85,27 @@ def test_modbus_analysis_view_exports_filtered_entries(tmp_path: Path) -> None:
     assert "timestamp,direction,slave,function,latency_ms,status,summary,exception_code,raw_hex" in content
     assert "12:00:00.100,RX,2,0x04,100,Paired Exception,error,0x02,02 84 02" in content
     assert "12:00:00.000,RX,1,0x03" not in content
+
+
+def test_modbus_analysis_view_exports_filtered_entries_to_json(tmp_path: Path) -> None:
+    app = QApplication.instance() or QApplication([])
+    view = ModbusAnalysisView()
+    view.add_entry("12:00:00.000", "RX", 1, 0x03, None, "Frame", "normal", False)
+    view.add_entry_details("01 03 00 00", None)
+    view.add_entry("12:00:00.100", "RX", 2, 0x04, 100, "Paired Exception", "error", True)
+    view.add_entry_details("02 84 02", 0x02)
+    view._exceptions_only_cb.setChecked(True)
+
+    export_path = tmp_path / "analysis.json"
+    view.export_json(str(export_path))
+
+    content = json.loads(export_path.read_text(encoding="utf-8"))
+    assert len(content) == 1
+    assert content[0]["timestamp"] == "12:00:00.100"
+    assert content[0]["function"] == "0x04"
+    assert content[0]["exception_code"] == "0x02"
+    assert content[0]["raw_hex"] == "02 84 02"
+    assert content[0]["highlight"] is True
 
 
 def test_modbus_analysis_view_shows_selected_entry_details() -> None:

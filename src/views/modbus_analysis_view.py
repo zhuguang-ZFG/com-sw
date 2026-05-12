@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -99,8 +100,19 @@ class ModbusAnalysisView(QWidget):
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(6, QHeaderView.Stretch)
+        self._table.itemSelectionChanged.connect(self._update_detail_panel)
 
         layout.addWidget(self._table)
+
+        self._detail_label = QLabel("Select an analysis row to inspect raw frame details.")
+        self._detail_label.setStyleSheet("color: #888;")
+        layout.addWidget(self._detail_label)
+
+        self._detail_text = QTextEdit()
+        self._detail_text.setReadOnly(True)
+        self._detail_text.setMaximumHeight(140)
+        self._detail_text.setFont(QFont("Consolas", 9))
+        layout.addWidget(self._detail_text)
 
     def add_entry(
         self,
@@ -121,8 +133,17 @@ class ModbusAnalysisView(QWidget):
             "latency_ms": latency_ms,
             "status": status,
             "summary": summary,
+            "raw_hex": "",
+            "exception_code": None,
             "highlight": highlight,
         })
+        self._apply_filters()
+
+    def add_entry_details(self, raw_hex: str, exception_code: int | None) -> None:
+        if not self._entries:
+            return
+        self._entries[-1]["raw_hex"] = raw_hex
+        self._entries[-1]["exception_code"] = exception_code
         self._apply_filters()
 
     def _apply_filters(self) -> None:
@@ -149,6 +170,7 @@ class ModbusAnalysisView(QWidget):
 
         self._count_label.setText(f"Entries: {len(filtered_entries)}")
         self._status_label.setText("Ready" if filtered_entries else "No matching Modbus analysis entries.")
+        self._update_detail_panel()
 
     def get_filtered_entries(self) -> List[dict]:
         exception_only = self._exceptions_only_cb.isChecked()
@@ -223,9 +245,56 @@ class ModbusAnalysisView(QWidget):
             self._table.setItem(row, column, item)
         self._table.scrollToBottom()
 
+    def _update_detail_panel(self) -> None:
+        current_row = self._table.currentRow()
+        if current_row < 0 or current_row >= self._table.rowCount():
+            self._detail_label.setText("Select an analysis row to inspect raw frame details.")
+            self._detail_text.clear()
+            return
+
+        timestamp = self._table.item(current_row, 0).text()
+        direction = self._table.item(current_row, 1).text()
+        slave = self._table.item(current_row, 2).text()
+        function = self._table.item(current_row, 3).text()
+        latency = self._table.item(current_row, 4).text()
+        status = self._table.item(current_row, 5).text()
+        summary = self._table.item(current_row, 6).text()
+
+        matched_entry = None
+        for entry in self.get_filtered_entries():
+            if (
+                entry["timestamp"] == timestamp
+                and entry["direction"] == direction
+                and str(entry["slave"]) == slave
+                and f"0x{entry['function']:02X}" == function
+                and entry["status"] == status
+                and entry["summary"] == summary
+            ):
+                matched_entry = entry
+                break
+
+        detail_lines = [
+            f"Timestamp: {timestamp}",
+            f"Direction: {direction}",
+            f"Slave: {slave}",
+            f"Function: {function}",
+            f"Status: {status}",
+            f"Latency: {latency or 'n/a'} ms",
+            f"Summary: {summary}",
+        ]
+        if matched_entry is not None:
+            if matched_entry.get("exception_code") is not None:
+                detail_lines.append(f"Exception Code: 0x{matched_entry['exception_code']:02X}")
+            detail_lines.append(f"Raw HEX: {matched_entry.get('raw_hex', '') or 'n/a'}")
+
+        self._detail_label.setText("Selected Modbus analysis entry")
+        self._detail_text.setPlainText("\n".join(detail_lines))
+
     def clear(self) -> None:
         self._entries.clear()
         self._table.setRowCount(0)
         self._count_label.setText("Entries: 0")
         self._status_label.setText("No Modbus analysis entries yet.")
         self._status_label.setStyleSheet("color: #888;")
+        self._detail_label.setText("Select an analysis row to inspect raw frame details.")
+        self._detail_text.clear()

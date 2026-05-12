@@ -37,6 +37,8 @@ class ModbusDisplayEntry:
     latency_ms: int | None
     status: str
     summary: str
+    raw_hex: str = ""
+    exception_code: int | None = None
     highlight: bool = False
 
 
@@ -67,8 +69,17 @@ def packet_to_display_entry(packet: DataPacket, analysis: ModbusAnalysisResult) 
         latency_ms=None,
         status="Exception" if analysis.is_exception else "Frame",
         summary=analysis.summary,
+        raw_hex=packet.hex_str,
+        exception_code=_extract_exception_code(packet),
         highlight=analysis.is_exception,
     )
+
+
+def _extract_exception_code(packet: DataPacket) -> int | None:
+    frame = decode_rtu_frame(packet.data)
+    if frame is None or not frame.is_exception:
+        return None
+    return frame.exception_code
 
 
 class ModbusPairingTracker:

@@ -394,6 +394,10 @@ class AppController(QObject):
                     entry.summary,
                     entry.highlight,
                 )
+                self.main_window.modbus_analysis_view.add_entry_details(
+                    entry.raw_hex,
+                    entry.exception_code,
+                )
 
         for packet in reversed(packets):
             pairing = self._modbus_pairing.observe(packet)
@@ -408,6 +412,10 @@ class AppController(QObject):
                     "Paired Exception" if pairing.is_exception else "Paired Response",
                     pairing.summary,
                     pairing.is_exception,
+                )
+                self.main_window.modbus_analysis_view.add_entry_details(
+                    packet.hex_str,
+                    None,
                 )
                 if pairing.is_exception:
                     self.main_window.status_bar.set_hint(f"Modbus response exception: {pairing.summary}")

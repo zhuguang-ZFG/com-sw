@@ -82,3 +82,16 @@ def test_modbus_analysis_view_exports_filtered_entries(tmp_path: Path) -> None:
     assert "timestamp,direction,slave,function,latency_ms,status,summary" in content
     assert "12:00:00.100,RX,2,0x04,100,Paired Exception,error" in content
     assert "12:00:00.000,RX,1,0x03" not in content
+
+
+def test_modbus_analysis_view_shows_selected_entry_details() -> None:
+    app = QApplication.instance() or QApplication([])
+    view = ModbusAnalysisView()
+    view.add_entry("12:00:00.100", "RX", 1, 0x03, 25, "Paired Response", "ok", False)
+    view.add_entry_details("01 03 04 00 0A 00 14", None)
+
+    view._table.selectRow(0)
+    detail = view._detail_text.toPlainText()
+    assert "Direction: RX" in detail
+    assert "Latency: 25 ms" in detail
+    assert "Raw HEX: 01 03 04 00 0A 00 14" in detail

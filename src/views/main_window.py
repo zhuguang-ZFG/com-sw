@@ -30,6 +30,15 @@ class MainWindow(QMainWindow):
     port_config_requested = Signal()
     preferences_requested = Signal()
     export_requested = Signal()
+    start_recording_requested = Signal()
+    stop_recording_requested = Signal()
+    replay_requested = Signal()
+    replay_play_requested = Signal()
+    replay_pause_requested = Signal()
+    replay_stop_requested = Signal()
+    replay_restart_requested = Signal()
+    replay_step_requested = Signal()
+    replay_speed_requested = Signal(float)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -134,6 +143,49 @@ class MainWindow(QMainWindow):
         export_action.setShortcut(QKeySequence("Ctrl+E"))
         export_action.triggered.connect(self._on_export)
         file_menu.addAction(export_action)
+
+        start_record_action = QAction("Start Recording...", self)
+        start_record_action.setShortcut(QKeySequence("Ctrl+R"))
+        start_record_action.triggered.connect(self._on_start_recording)
+        file_menu.addAction(start_record_action)
+
+        stop_record_action = QAction("Stop Recording", self)
+        stop_record_action.setShortcut(QKeySequence("Ctrl+Shift+R"))
+        stop_record_action.triggered.connect(self._on_stop_recording)
+        file_menu.addAction(stop_record_action)
+
+        replay_action = QAction("Replay Session...", self)
+        replay_action.setShortcut(QKeySequence("Ctrl+Shift+O"))
+        replay_action.triggered.connect(self._on_replay)
+        file_menu.addAction(replay_action)
+
+        file_menu.addSeparator()
+
+        replay_play_action = QAction("Play Replay", self)
+        replay_play_action.triggered.connect(self._on_replay_play)
+        file_menu.addAction(replay_play_action)
+
+        replay_pause_action = QAction("Pause Replay", self)
+        replay_pause_action.triggered.connect(self._on_replay_pause)
+        file_menu.addAction(replay_pause_action)
+
+        replay_stop_action = QAction("Stop Replay", self)
+        replay_stop_action.triggered.connect(self._on_replay_stop)
+        file_menu.addAction(replay_stop_action)
+
+        replay_restart_action = QAction("Restart Replay", self)
+        replay_restart_action.triggered.connect(self._on_replay_restart)
+        file_menu.addAction(replay_restart_action)
+
+        replay_step_action = QAction("Step Replay", self)
+        replay_step_action.triggered.connect(self._on_replay_step)
+        file_menu.addAction(replay_step_action)
+
+        replay_speed_menu = file_menu.addMenu("Replay Speed")
+        for label, speed in (("0.5x", 0.5), ("1x", 1.0), ("2x", 2.0), ("4x", 4.0)):
+            speed_action = QAction(label, self)
+            speed_action.triggered.connect(lambda checked=False, s=speed: self.replay_speed_requested.emit(s))
+            replay_speed_menu.addAction(speed_action)
 
         file_menu.addSeparator()
 
@@ -264,6 +316,30 @@ class MainWindow(QMainWindow):
 
     def _on_export(self) -> None:
         self.export_requested.emit()
+
+    def _on_start_recording(self) -> None:
+        self.start_recording_requested.emit()
+
+    def _on_stop_recording(self) -> None:
+        self.stop_recording_requested.emit()
+
+    def _on_replay(self) -> None:
+        self.replay_requested.emit()
+
+    def _on_replay_play(self) -> None:
+        self.replay_play_requested.emit()
+
+    def _on_replay_pause(self) -> None:
+        self.replay_pause_requested.emit()
+
+    def _on_replay_stop(self) -> None:
+        self.replay_stop_requested.emit()
+
+    def _on_replay_restart(self) -> None:
+        self.replay_restart_requested.emit()
+
+    def _on_replay_step(self) -> None:
+        self.replay_step_requested.emit()
 
     def _on_about(self) -> None:
         QMessageBox.about(

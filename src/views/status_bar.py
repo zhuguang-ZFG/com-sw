@@ -16,10 +16,12 @@ class StatusBar(QStatusBar):
         self._port_label = QLabel("")
         self._tx_label = QLabel("TX: 0 B")
         self._rx_label = QLabel("RX: 0 B")
+        self._replay_label = QLabel("")
 
         self.addPermanentWidget(self._port_label)
         self.addPermanentWidget(self._tx_label)
         self.addPermanentWidget(self._rx_label)
+        self.addPermanentWidget(self._replay_label)
 
         self._rx_count = 0
         self._tx_count = 0
@@ -52,6 +54,21 @@ class StatusBar(QStatusBar):
     def add_tx(self, count: int) -> None:
         self._tx_count += count
         self._update_counters()
+
+    def reset_counters(self) -> None:
+        self._rx_count = 0
+        self._tx_count = 0
+        self._update_counters()
+
+    def set_replay_status(self, current: int, total: int, speed: float, playing: bool) -> None:
+        if total <= 0:
+            self._replay_label.setText("")
+            return
+        state = "Playing" if playing else "Ready"
+        self._replay_label.setText(f"Replay: {current}/{total} @{speed:.1f}x {state}")
+
+    def clear_replay_status(self) -> None:
+        self._replay_label.setText("")
 
     def _update_counters(self) -> None:
         self._rx_label.setText(f"RX: {self._rx_count:,} B")

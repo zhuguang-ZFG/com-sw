@@ -3,7 +3,7 @@
 from typing import List
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from src.controllers.modbus_analysis import analyze_packet
 from src.models.data_packet import DataPacket
 from src.utils.formatters import format_table_row
 
@@ -126,11 +127,23 @@ class TableView(QWidget):
         for offset, packet in enumerate(packets):
             row = format_table_row(packet, display_mode=self._display_mode)
             table_row = current_rows + offset
+            items = [
+                QTableWidgetItem(row["timestamp"]),
+                QTableWidgetItem(row["direction"]),
+                QTableWidgetItem(row["length"]),
+                QTableWidgetItem(row["data"]),
+            ]
+            analysis = analyze_packet(packet)
+            if analysis.is_exception:
+                for item in items:
+                    item.setBackground(QColor("#4A1F1F"))
+                    item.setForeground(QColor("#FFB3B3"))
+                    item.setToolTip(analysis.summary)
+            elif analysis.is_modbus:
+                items[3].setToolTip(analysis.summary)
 
-            self._table.setItem(table_row, 0, QTableWidgetItem(row["timestamp"]))
-            self._table.setItem(table_row, 1, QTableWidgetItem(row["direction"]))
-            self._table.setItem(table_row, 2, QTableWidgetItem(row["length"]))
-            self._table.setItem(table_row, 3, QTableWidgetItem(row["data"]))
+            for column, item in enumerate(items):
+                self._table.setItem(table_row, column, item)
 
         overflow_rows = self._table.rowCount() - self._max_rows
         if overflow_rows > 0:

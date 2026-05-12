@@ -16,6 +16,9 @@ A lightweight serial communication debugging and monitoring tool built with Pyth
   - ASCII
   - TCP
 - Export to `TXT` and `CSV`
+- Session recording and replay via `JSONL`
+- Replay playback controls with pause, stop, and speed options
+- Replay-time Modbus RTU exception highlighting and quick analysis hints
 - Persistent preferences for display and port settings
 - Dark theme optimized for long sessions
 
@@ -82,6 +85,7 @@ Saved settings include:
 - Table maximum rows
 - Dump formatting preferences
 - Export format and include options
+- Last session recording file
 - Window geometry
 
 ## Running Tests

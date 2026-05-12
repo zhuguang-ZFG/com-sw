@@ -17,6 +17,9 @@ from PySide6.QtWidgets import QMessageBox, QFileDialog
 
 from src.controllers.config_manager import ConfigManager
 from src.controllers.data_pump import DataPump
+from src.controllers.modbus_analysis import ModbusPairingTracker, analyze_packet
+from src.controllers.session_replay_controller import SessionReplayController
+from src.controllers.session_recorder import SessionRecorder, load_session
 from src.models.data_packet import DataPacket
 from src.models.port_config import PortConfig
 from src.serial.ring_buffer import RingBuffer
@@ -59,6 +62,9 @@ class AppController(QObject):
         self._is_connected = False
         self._export_file = None
         self._export_format = "txt"
+        self._session_recorder = SessionRecorder()
+        self._replay_controller = SessionReplayController(self._on_data_received, self)
+        self._modbus_pairing = ModbusPairingTracker()
 
         # Wire everything
         self._wire_signals()
@@ -97,6 +103,17 @@ class AppController(QObject):
         self.main_window.port_config_requested.connect(self._open_port_config_dialog)
         self.main_window.preferences_requested.connect(self._open_preferences_dialog)
         self.main_window.export_requested.connect(self._open_export_dialog)
+        self.main_window.start_recording_requested.connect(self._start_recording)
+        self.main_window.stop_recording_requested.connect(self._stop_recording)
+        self.main_window.replay_requested.connect(self._replay_session)
+        self.main_window.replay_play_requested.connect(self._play_replay)
+        self.main_window.replay_pause_requested.connect(self._pause_replay)
+        self.main_window.replay_stop_requested.connect(self._stop_replay)
+        self.main_window.replay_restart_requested.connect(self._restart_replay)
+        self.main_window.replay_step_requested.connect(self._step_replay)
+        self.main_window.replay_speed_requested.connect(self._set_replay_speed)
+        self._replay_controller.finished.connect(self._on_replay_finished)
+        self._replay_controller.progress_changed.connect(self._on_replay_progress_changed)
 
         # Terminal view send
         self.main_window.terminal_view.send_requested.connect(
@@ -184,6 +201,9 @@ class AppController(QObject):
         # Export if active
         if self._export_file:
             self._write_export(packets)
+        if self._session_recorder.is_recording:
+            self._session_recorder.record_packets(packets)
+        self._update_modbus_hint(packets)
 
     # ---- Export -------------------------------------------------------------------
 
@@ -247,7 +267,135 @@ class AppController(QObject):
             self.start_export(export["file_path"], export["format"])
             self.main_window.status_bar.set_hint(f"Exporting to {export['file_path']}")
 
+    def _start_recording(self) -> None:
+        suggested = self._config.get("recording", "last_session_file", default="")
+        if not suggested:
+            suggested = str(Path.home() / "Documents" / "com-sw-session.jsonl")
+        file_path, _ = QFileDialog.getSaveFileName(
+            self.main_window,
+            "Start Session Recording",
+            suggested,
+            "JSON Lines (*.jsonl)",
+        )
+        if not file_path:
+            return
+        self._session_recorder.start(file_path)
+        self._config.set("recording", "last_session_file", file_path)
+        self._config.save()
+        self.main_window.status_bar.set_hint(f"Recording session to {file_path}")
+
+    def _stop_recording(self) -> None:
+        if not self._session_recorder.is_recording:
+            self.main_window.status_bar.set_hint("No active session recording.")
+            return
+        file_path = self._session_recorder.file_path
+        self._session_recorder.stop()
+        self.main_window.status_bar.set_hint(f"Recording saved to {file_path}")
+
+    def _replay_session(self) -> None:
+        suggested = self._config.get("recording", "last_session_file", default="")
+        file_path, _ = QFileDialog.getOpenFileName(
+            self.main_window,
+            "Replay Session",
+            suggested,
+            "JSON Lines (*.jsonl)",
+        )
+        if not file_path:
+            return
+        packets = load_session(file_path)
+        self._prepare_replay_view()
+        self._replay_controller.load(packets)
+        self._config.set("recording", "last_session_file", file_path)
+        self._config.save()
+        self.main_window.status_bar.set_hint(f"Loaded {len(packets)} packet(s) from {file_path}. Use Play Replay to start.")
+
+    def _play_replay(self) -> None:
+        if not self._replay_controller.is_loaded:
+            self.main_window.status_bar.set_hint("No replay session loaded.")
+            return
+        self.main_window.status_bar.set_hint(
+            f"Replay started at {self._replay_controller.speed:.1f}x speed."
+        )
+        self._replay_controller.play()
+
+    def _pause_replay(self) -> None:
+        if not self._replay_controller.is_playing:
+            self.main_window.status_bar.set_hint("Replay is not currently playing.")
+            return
+        self._replay_controller.pause()
+        self.main_window.status_bar.set_hint("Replay paused.")
+
+    def _stop_replay(self) -> None:
+        if not self._replay_controller.is_loaded:
+            self.main_window.status_bar.set_hint("No replay session loaded.")
+            return
+        self._replay_controller.stop()
+        self._prepare_replay_view()
+        self.main_window.status_bar.set_hint("Replay stopped and reset.")
+
+    def _restart_replay(self) -> None:
+        if not self._replay_controller.is_loaded:
+            self.main_window.status_bar.set_hint("No replay session loaded.")
+            return
+        self._prepare_replay_view()
+        self._replay_controller.restart()
+        self.main_window.status_bar.set_hint("Replay restarted.")
+
+    def _step_replay(self) -> None:
+        if not self._replay_controller.is_loaded:
+            self.main_window.status_bar.set_hint("No replay session loaded.")
+            return
+        self._replay_controller.step()
+        self.main_window.status_bar.set_hint("Replay stepped by one packet.")
+
+    def _set_replay_speed(self, speed: float) -> None:
+        self._replay_controller.set_speed(speed)
+        self._config.set("recording", "replay_speed", speed)
+        self._config.save()
+        self.main_window.status_bar.set_hint(f"Replay speed set to {speed:.1f}x.")
+
+    def _on_replay_finished(self) -> None:
+        self.main_window.status_bar.set_hint("Replay finished.")
+
+    def _on_replay_progress_changed(self, current: int, total: int, speed: float) -> None:
+        self.main_window.status_bar.set_replay_status(
+            current,
+            total,
+            speed,
+            self._replay_controller.is_playing,
+        )
+
+    def _prepare_replay_view(self) -> None:
+        self.main_window.terminal_view.clear()
+        self.main_window.dump_view.clear()
+        self.main_window.table_view.clear()
+        self.main_window.line_view.clear()
+        self.main_window.status_bar.reset_counters()
+        self.main_window.status_bar.clear_replay_status()
+        self._modbus_pairing.reset()
+
+    def _update_modbus_hint(self, packets: List[DataPacket]) -> None:
+        for packet in reversed(packets):
+            pairing = self._modbus_pairing.observe(packet)
+            if pairing.matched:
+                if pairing.is_exception:
+                    self.main_window.status_bar.set_hint(f"Modbus response exception: {pairing.summary}")
+                else:
+                    self.main_window.status_bar.set_hint(pairing.summary)
+                return
+            analysis = analyze_packet(packet)
+            if not analysis.is_modbus:
+                continue
+            if analysis.is_exception:
+                self.main_window.status_bar.set_hint(f"Modbus exception detected: {analysis.summary}")
+            elif self._replay_controller.is_loaded:
+                self.main_window.status_bar.set_hint(analysis.summary)
+            return
+
     def _apply_config_to_ui(self) -> None:
+        self._replay_controller.set_speed(
+            float(self._config.get("recording", "replay_speed", default=1.0))
+        )
         self.main_window.baud_combo.setCurrentText(str(self._config.get("port", "last_baudrate", default=9600)))
         last_port = self._config.get("port", "last_port", default="")
         if last_port:

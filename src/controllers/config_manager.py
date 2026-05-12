@@ -53,6 +53,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "include_direction": True,
         "append_mode": True,
     },
+    "recording": {
+        "last_session_file": "",
+        "replay_speed": 1.0,
+    },
     "window": {
         "geometry": None,
         "state": None,

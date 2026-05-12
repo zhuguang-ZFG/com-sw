@@ -248,6 +248,26 @@ def test_table_view_pause_keeps_collecting_until_jump_latest() -> None:
     assert view._table.item(1, 1).text() == "TX"
 
 
+def test_table_view_exceptions_only_filter() -> None:
+    app = QApplication.instance() or QApplication([])
+    view = TableView()
+    packets = [
+        DataPacket(data=b"OK", direction=Direction.RX, timestamp=datetime(2025, 1, 1, 12, 0, 0)),
+        DataPacket(data=encode_rtu_frame(1, 0x83, bytes([0x02])), direction=Direction.RX, timestamp=datetime(2025, 1, 1, 12, 0, 1)),
+    ]
+
+    view.append_packets(packets)
+    assert view._table.rowCount() == 2
+
+    view._exceptions_only_cb.setChecked(True)
+    assert view._table.rowCount() == 1
+    assert view._table.item(0, 0).text() == "12:00:01.000"
+    assert "exception" in view._status_label.text().lower()
+
+    view._exceptions_only_cb.setChecked(False)
+    assert view._table.rowCount() == 2
+
+
 def test_modbus_analysis_view_search_filters_summary_and_raw_hex() -> None:
     app = QApplication.instance() or QApplication([])
     view = ModbusAnalysisView()

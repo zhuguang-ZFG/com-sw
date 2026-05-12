@@ -75,6 +75,10 @@ class TableView(QWidget):
         self._search_filter.textChanged.connect(self._apply_filters)
         toolbar.addWidget(self._search_filter)
 
+        self._exceptions_only_cb = QCheckBox("Exceptions Only")
+        self._exceptions_only_cb.toggled.connect(self._apply_filters)
+        toolbar.addWidget(self._exceptions_only_cb)
+
         toolbar.addStretch()
 
         self._row_label = QLabel("Rows: 0")
@@ -246,6 +250,7 @@ class TableView(QWidget):
         self._direction_filter.setCurrentText("ALL")
         self._min_length_filter.clear()
         self._search_filter.clear()
+        self._exceptions_only_cb.setChecked(False)
         self._row_label.setText("Rows: 0")
         self._status_label.setText("No packets yet. Incoming traffic will appear here.")
         self._status_label.setStyleSheet("color: #888;")
@@ -271,6 +276,7 @@ class TableView(QWidget):
         direction_filter = self._direction_filter.currentText()
         min_length_text = self._min_length_filter.text().strip()
         search_filter = self._search_filter.text().strip().lower()
+        exceptions_only = self._exceptions_only_cb.isChecked()
         try:
             min_length = int(min_length_text) if min_length_text else None
         except ValueError:
@@ -278,6 +284,8 @@ class TableView(QWidget):
 
         filtered_rows = []
         for row in self._rows:
+            if exceptions_only and not row["is_exception"]:
+                continue
             if direction_filter != "ALL" and row["direction"] != direction_filter:
                 continue
             if min_length is not None and row["length_value"] < min_length:
@@ -325,7 +333,10 @@ class TableView(QWidget):
         if self._autoscroll_cb.isChecked() and self._table.rowCount() > 0:
             self._table.scrollToBottom()
         self._row_label.setText(f"Rows: {self._table.rowCount()}")
-        self._status_label.setText("Ready" if filtered_rows else "No matching packets.")
+        if filtered_rows:
+            self._status_label.setText("Showing exception packets." if exceptions_only else "Ready")
+        else:
+            self._status_label.setText("No matching exception packets." if exceptions_only else "No matching packets.")
         self._status_label.setStyleSheet("color: #888;")
         self._jump_latest_btn.setEnabled(self._table.rowCount() > 0)
         self._update_copy_button()

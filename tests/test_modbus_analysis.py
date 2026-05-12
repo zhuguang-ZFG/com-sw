@@ -3,6 +3,7 @@
 from datetime import datetime
 from pathlib import Path
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from src.controllers.modbus_analysis import (
@@ -112,3 +113,16 @@ def test_modbus_analysis_view_search_filters_summary_and_raw_hex() -> None:
     view._search_filter.setText("00 ff")
     assert view._table.rowCount() == 1
     assert view._table.item(0, 1).text() == "TX"
+
+
+def test_modbus_analysis_view_sorts_numeric_columns() -> None:
+    app = QApplication.instance() or QApplication([])
+    view = ModbusAnalysisView()
+    view.add_entry("12:00:00.200", "RX", 10, 0x10, 200, "Frame", "later", False)
+    view.add_entry("12:00:00.100", "RX", 2, 0x03, 20, "Frame", "earlier", False)
+
+    view._table.sortItems(2, Qt.AscendingOrder)
+    assert view._table.item(0, 2).text() == "2"
+
+    view._table.sortItems(4, Qt.AscendingOrder)
+    assert view._table.item(0, 4).text() == "20"

@@ -23,6 +23,19 @@ from PySide6.QtWidgets import (
 )
 
 
+class NumericTableWidgetItem(QTableWidgetItem):
+    """QTableWidgetItem that sorts by numeric value."""
+
+    def __init__(self, text: str, numeric_value: int) -> None:
+        super().__init__(text)
+        self._numeric_value = numeric_value
+
+    def __lt__(self, other: QTableWidgetItem) -> bool:
+        if isinstance(other, NumericTableWidgetItem):
+            return self._numeric_value < other._numeric_value
+        return super().__lt__(other)
+
+
 class ModbusAnalysisView(QWidget):
     """Tabular Modbus analysis results."""
 
@@ -96,6 +109,7 @@ class ModbusAnalysisView(QWidget):
         self._table.setFont(QFont("Consolas", 9))
         self._table.setAlternatingRowColors(True)
         self._table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self._table.setSortingEnabled(True)
         self._table.setWordWrap(False)
         self._table.verticalHeader().setVisible(False)
 
@@ -237,9 +251,12 @@ class ModbusAnalysisView(QWidget):
         items: List[QTableWidgetItem] = [
             QTableWidgetItem(entry["timestamp"]),
             QTableWidgetItem(entry["direction"]),
-            QTableWidgetItem(str(entry["slave"])),
-            QTableWidgetItem(f"0x{entry['function']:02X}"),
-            QTableWidgetItem("" if entry["latency_ms"] is None else str(entry["latency_ms"])),
+            NumericTableWidgetItem(str(entry["slave"]), entry["slave"]),
+            NumericTableWidgetItem(f"0x{entry['function']:02X}", entry["function"]),
+            NumericTableWidgetItem(
+                "" if entry["latency_ms"] is None else str(entry["latency_ms"]),
+                -1 if entry["latency_ms"] is None else entry["latency_ms"],
+            ),
             QTableWidgetItem(entry["status"]),
             QTableWidgetItem(entry["summary"]),
         ]

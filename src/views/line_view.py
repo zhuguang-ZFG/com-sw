@@ -1,17 +1,12 @@
-"""Line view — filtered line-by-line serial data display.
-
-Displays each received data packet as a single line.
-Supports content filtering (show only lines containing a substring).
-"""
+"""Line view - filtered line-by-line serial data display."""
 
 from typing import List
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLineEdit,
-    QPushButton, QLabel, QCheckBox, QComboBox,
+    QPushButton, QLabel, QComboBox,
 )
-from PySide6.QtGui import QFont, QTextCursor
+from PySide6.QtGui import QFont
 
 from src.models.data_packet import DataPacket
 from src.utils.formatters import format_terminal_line
@@ -26,7 +21,6 @@ class LineView(QWidget):
         self._filter_text = ""
         self._show_timestamp = True
         self._max_lines = 5000
-        self._line_count = 0
         self._filtered_count = 0
 
         self._setup_ui()
@@ -35,10 +29,9 @@ class LineView(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        # Toolbar
         toolbar = QHBoxLayout()
 
-        toolbar.addWidget(QLabel("显示:"))
+        toolbar.addWidget(QLabel("Display:"))
         self._mode_combo = QComboBox()
         self._mode_combo.addItems(["ASCII", "HEX"])
         self._mode_combo.currentTextChanged.connect(self._on_mode_changed)
@@ -46,9 +39,9 @@ class LineView(QWidget):
 
         toolbar.addSpacing(10)
 
-        toolbar.addWidget(QLabel("过滤:"))
+        toolbar.addWidget(QLabel("Filter:"))
         self._filter_input = QLineEdit()
-        self._filter_input.setPlaceholderText("输入关键词过滤...")
+        self._filter_input.setPlaceholderText("Type text to filter visible lines...")
         self._filter_input.textChanged.connect(self._on_filter_changed)
         toolbar.addWidget(self._filter_input)
 
@@ -57,16 +50,16 @@ class LineView(QWidget):
 
         toolbar.addStretch()
 
-        clear_btn = QPushButton("清空")
+        clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(self.clear)
         toolbar.addWidget(clear_btn)
 
         layout.addLayout(toolbar)
 
-        # Display area
         self._text_display = QTextEdit()
         self._text_display.setReadOnly(True)
         self._text_display.setFont(QFont("Consolas", 10))
+        self._text_display.document().setMaximumBlockCount(self._max_lines)
         self._text_display.setStyleSheet("""
             QTextEdit {
                 background-color: #1E1E1E;
@@ -89,30 +82,16 @@ class LineView(QWidget):
                 show_direction=True,
             )
 
-            if self._filter_text:
-                if self._filter_text not in line:
-                    filtered += 1
-                    continue
+            if self._filter_text and self._filter_text not in line:
+                filtered += 1
+                continue
 
             lines.append(line)
 
+        self._filtered_count += filtered
+
         if lines:
             self._text_display.append("\n".join(lines))
-            self._line_count += len(lines)
-            self._filtered_count += filtered
-
-            # Trim
-            if self._line_count > self._max_lines:
-                cursor = self._text_display.textCursor()
-                cursor.movePosition(QTextCursor.Start)
-                cursor.movePosition(
-                    QTextCursor.Down, QTextCursor.KeepAnchor,
-                    self._line_count - self._max_lines,
-                )
-                cursor.removeSelectedText()
-                self._line_count = self._max_lines
-
-            # Auto-scroll
             scrollbar = self._text_display.verticalScrollBar()
             scrollbar.setValue(scrollbar.maximum())
 
@@ -123,17 +102,27 @@ class LineView(QWidget):
 
     def _on_filter_changed(self, text: str) -> None:
         self._filter_text = text
+        self._filtered_count = 0
         self._update_filter_label()
 
     def _update_filter_label(self) -> None:
         if self._filter_text:
-            self._filter_label.setText(
-                f"(已过滤: {self._filtered_count})"
-            )
+            self._filter_label.setText(f"Filtered: {self._filtered_count}")
         else:
             self._filter_label.setText("")
 
     def clear(self) -> None:
         self._text_display.clear()
-        self._line_count = 0
         self._filtered_count = 0
+        self._update_filter_label()
+
+    def apply_preferences(self, *, display_mode: str | None = None, max_lines: int | None = None,
+                          font_size: int | None = None) -> None:
+        if display_mode:
+            self._display_mode = display_mode
+            self._mode_combo.setCurrentText(display_mode.upper())
+        if max_lines is not None:
+            self._max_lines = max_lines
+            self._text_display.document().setMaximumBlockCount(max_lines)
+        if font_size is not None:
+            self._text_display.setFont(QFont("Consolas", font_size))

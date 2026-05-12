@@ -1,4 +1,4 @@
-"""AppController — the central orchestrator.
+"""AppController 鈥?the central orchestrator.
 
 Wires together all components:
 - PortManager + SerialReader + RingBuffer + DataPump
@@ -67,6 +67,7 @@ class AppController(QObject):
         self._port_enumerator.start()
         ports = PortEnumerator.list_ports()
         self.main_window.update_port_list(ports)
+        self._apply_config_to_ui()
 
         # Restore window geometry
         self._restore_window_state()
@@ -93,6 +94,9 @@ class AppController(QObject):
         self.main_window.config_button.clicked.connect(
             lambda: self.main_window._on_port_config()
         )
+        self.main_window.port_config_requested.connect(self._open_port_config_dialog)
+        self.main_window.preferences_requested.connect(self._open_preferences_dialog)
+        self.main_window.export_requested.connect(self._open_export_dialog)
 
         # Terminal view send
         self.main_window.terminal_view.send_requested.connect(
@@ -113,7 +117,7 @@ class AppController(QObject):
         """User clicked Connect."""
         config = self.main_window.get_selected_port_config()
         if not config.port:
-            QMessageBox.warning(self.main_window, "提示", "请选择串口")
+            QMessageBox.warning(self.main_window, "Port Required", "Select a serial port or type a device path before connecting.")
             return
 
         # Apply preferences from config
@@ -140,6 +144,7 @@ class AppController(QObject):
         if config:
             self.main_window.status_bar.set_connected(port_name, config.settings_str)
         self.main_window.set_connected_ui(True)
+        self.main_window.status_bar.set_hint(f"Connected to {port_name}.")
 
         # Save last port
         self._config.set("port", "last_port", port_name)
@@ -150,6 +155,7 @@ class AppController(QObject):
         self._is_connected = False
         self.main_window.status_bar.set_disconnected()
         self.main_window.set_connected_ui(False)
+        self.main_window.status_bar.set_hint(f"Disconnected from {port_name}.")
 
     def _on_port_error(self, message: str) -> None:
         """Port error occurred."""
@@ -158,7 +164,7 @@ class AppController(QObject):
     # ---- Data Flow ----------------------------------------------------------------
 
     def _on_data_received(self, packets: List[DataPacket]) -> None:
-        """Data pumped from the ring buffer — route to all views."""
+        """Data pumped from the ring buffer 鈥?route to all views."""
         if not packets:
             return
 
@@ -184,10 +190,91 @@ class AppController(QObject):
     def _on_modbus_send(self, slave_id: int, func_code: int, data: bytes) -> None:
         """Handle Modbus master request from the Modbus panel."""
         if not self._is_connected:
-            QMessageBox.warning(self.main_window, "提示", "请先连接串口")
+            QMessageBox.warning(self.main_window, "Not Connected", "Connect to a serial port before sending a Modbus frame.")
             return
         # The Modbus panel formats the full frame
         self._port_manager.send(data)
+
+    def _open_port_config_dialog(self) -> None:
+        from src.views.port_config_dialog import PortConfigDialog
+
+        dialog = PortConfigDialog(self.main_window)
+        dialog.set_config(self._config.get("port", default={}))
+        if dialog.exec():
+            config = dialog.get_config()
+            self._config.set("port", "last_port", config["port"])
+            self._config.set("port", "last_baudrate", config["baudrate"])
+            self._config.set("port", "last_bytesize", config["bytesize"])
+            self._config.set("port", "last_stopbits", config["stopbits"])
+            self._config.set("port", "last_parity", config["parity"])
+            self._config.set("port", "last_flow_control", config["flow_control"])
+            self._config.set("port", "dtr_on_connect", config["dtr"])
+            self._config.set("port", "rts_on_connect", config["rts"])
+            self._config.save()
+            self.main_window.port_combo.setEditText(config["port"])
+            self.main_window.baud_combo.setCurrentText(str(config["baudrate"]))
+            self.main_window.status_bar.set_hint("Port settings saved.")
+
+    def _open_preferences_dialog(self) -> None:
+        from src.views.preferences_dialog import PreferencesDialog
+
+        dialog = PreferencesDialog(self.main_window)
+        dialog.set_preferences(self._config.load())
+        if dialog.exec():
+            prefs = dialog.get_preferences()
+            for key, value in prefs["display"].items():
+                self._config.set("display", key, value)
+            for key, value in prefs["port"].items():
+                self._config.set("port", key, value)
+            self._config.save()
+            self._apply_config_to_ui()
+            self.main_window.status_bar.set_hint("Preferences saved.")
+
+    def _open_export_dialog(self) -> None:
+        from src.views.export_dialog import ExportDialog
+
+        dialog = ExportDialog(self.main_window)
+        export_config = self._config.get("export", default={})
+        export_config = {**export_config, "file_path": self._export_file or ""}
+        dialog.set_export_config(export_config)
+        if dialog.exec():
+            export = dialog.get_export_config()
+            self._config.set("export", "format", export["format"])
+            self._config.set("export", "include_timestamps", export["include_timestamps"])
+            self._config.set("export", "include_direction", export["include_direction"])
+            self._config.set("export", "append_mode", export["append_mode"])
+            self._config.save()
+            self.start_export(export["file_path"], export["format"])
+            self.main_window.status_bar.set_hint(f"Exporting to {export['file_path']}")
+
+    def _apply_config_to_ui(self) -> None:
+        self.main_window.baud_combo.setCurrentText(str(self._config.get("port", "last_baudrate", default=9600)))
+        last_port = self._config.get("port", "last_port", default="")
+        if last_port:
+            self.main_window.port_combo.setEditText(last_port)
+        self.main_window.terminal_view.apply_preferences(
+            display_mode=self._config.get("display", "terminal_mode", default="ascii"),
+            auto_scroll=self._config.get("display", "terminal_auto_scroll", default=True),
+            show_timestamp=self._config.get("display", "terminal_show_timestamp", default=True),
+            show_direction=self._config.get("display", "terminal_show_direction", default=True),
+            font_size=self._config.get("display", "terminal_font_size", default=10),
+        )
+        self.main_window.table_view.apply_preferences(
+            display_mode=self._config.get("display", "table_display_mode", default="ascii"),
+            max_rows=self._config.get("display", "table_max_rows", default=5000),
+            font_size=self._config.get("display", "terminal_font_size", default=10),
+        )
+        self.main_window.line_view.apply_preferences(
+            display_mode=self._config.get("display", "line_display_mode", default="ascii"),
+            max_lines=self._config.get("display", "line_history", default=500),
+            font_size=self._config.get("display", "terminal_font_size", default=10),
+        )
+        self.main_window.dump_view.apply_preferences(
+            bytes_per_line=self._config.get("display", "dump_bytes_per_line", default=16),
+            show_offset=self._config.get("display", "dump_show_offset", default=True),
+            show_ascii=self._config.get("display", "dump_show_ascii", default=True),
+            font_size=self._config.get("display", "terminal_font_size", default=10),
+        )
 
     # ---- Export -------------------------------------------------------------------
 
@@ -255,3 +342,4 @@ class AppController(QObject):
                 self.main_window.restoreGeometry(geom)
             except Exception:
                 pass
+

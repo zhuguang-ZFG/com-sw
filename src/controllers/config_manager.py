@@ -34,11 +34,13 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     },
     "display": {
         "terminal_mode": "ascii",
+        "terminal_font_size": 10,
         "terminal_auto_scroll": True,
         "terminal_timestamp_format": "time_only",
         "terminal_show_direction": True,
         "terminal_show_timestamp": True,
         "table_display_mode": "ascii",
+        "table_max_rows": 5000,
         "dump_bytes_per_line": 16,
         "dump_show_offset": True,
         "dump_show_ascii": True,

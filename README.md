@@ -1,31 +1,34 @@
-# COM-SW — Serial Port Monitoring Tool
+# COM-SW Serial Port Monitoring Tool
 
-A lightweight serial port communication debugging and monitoring tool, architected with a modular Python + PySide6 stack.
+A lightweight serial communication debugging and monitoring tool built with Python, PySide6, and pyserial.
 
 ## Features
 
-- **Serial Port Management**: COM port enumeration, hot-plug detection, full configuration (baud rate, parity, stop bits, flow control)
-- **Four Display Views**:
-  - **Terminal View**: ASCII/HEX send & receive with timestamps and direction indicators
-  - **Dump View**: Classic hex dump layout with address offset and ASCII sidebar
-  - **Table View**: Structured column display with sortable timestamp/direction/length/data columns
-  - **Line View**: Line-by-line display with content filtering
-- **Modbus Protocol**: RTU (serial), ASCII, and TCP transport with CRC16/LRC verification
-- **Data Export**: TXT and CSV export with configurable include options
-- **Dark Theme**: Built-in dark stylesheet for comfortable long-term use
-- **Persistent Configuration**: Auto-saves window layout, port settings, and display preferences
+- Serial port enumeration and hot-plug detection
+- Toolbar connection flow with saved port preferences
+- Four data views:
+  - `Terminal View`: ASCII / HEX send and receive with timestamps and direction
+  - `Dump View`: classic hex dump with offset and ASCII sidebar
+  - `Table View`: sortable structured rows for timestamp, direction, length, and data
+  - `Line View`: line-oriented display with filtering
+- Modbus support:
+  - RTU
+  - ASCII
+  - TCP
+- Export to `TXT` and `CSV`
+- Persistent preferences for display and port settings
+- Dark theme optimized for long sessions
 
 ## Architecture
 
-```
-COM Port -> SerialReader(QThread) -> RingBuffer -> DataPump(50ms timer)
-  -> AppController -> TerminalView / DumpView / TableView / LineView
+```text
+COM Port -> SerialReader(QThread) -> RingBuffer -> DataPump
+  -> AppController -> Terminal / Dump / Table / Line Views
 ```
 
-- **MVC + Signal/Slot** architecture
-- **Thread-safe ring buffer** with atomic drain
-- **Dedicated serial reader QThread** for non-blocking I/O
-- **Modular views** — each formats data independently
+- MVC-style organization with Qt signal/slot wiring
+- Thread-safe ring buffer with batched UI updates
+- Modular views with independent formatting behavior
 
 ## Requirements
 
@@ -37,94 +40,83 @@ COM Port -> SerialReader(QThread) -> RingBuffer -> DataPump(50ms timer)
 ```bash
 git clone https://github.com/zhuguang-ZFG/com-sw.git
 cd com-sw
-
-# Install dependencies
 pip install -r requirements.txt
 ```
 
 ## Quick Start
 
+### Windows
+
+Use the included launcher:
+
+```bat
+run-com-sw.cmd
+```
+
+You can also double-click `run-com-sw.cmd` in Explorer.
+
+### Any Platform
+
 ```bash
 python main.py
 ```
 
-1. Select a COM port from the dropdown (or type a device path on Linux)
-2. Choose baud rate
-3. Click "打开" to connect
-4. Data appears in real-time in all four views
-5. Type in the send input at the bottom of Terminal view and press Enter to send
+## Typical Usage
 
-## Project Structure
+1. Select a serial port from the toolbar, or type one manually.
+2. Choose a baud rate.
+3. Click `Connect`.
+4. Watch incoming data in all four views.
+5. Use the Terminal send area for ASCII, HEX, or Modbus RTU frames.
+6. Open `Port Settings`, `Preferences`, or `Export` from the UI when needed.
 
-```
-com-sw/
-├── main.py                         # Entry point
-├── requirements.txt
-├── README.md
-├── src/
-│   ├── app.py                      # QApplication bootstrap
-│   ├── serial/
-│   │   ├── ring_buffer.py          # Thread-safe data buffer
-│   │   ├── serial_reader.py        # QThread serial reader
-│   │   ├── port_manager.py         # Port lifecycle management
-│   │   └── port_enumerator.py      # COM port enumeration + hot-plug
-│   ├── protocol/
-│   │   ├── modbus_rtu.py           # Modbus RTU (CRC16)
-│   │   ├── modbus_ascii.py         # Modbus ASCII (LRC)
-│   │   ├── modbus_tcp.py           # Modbus TCP (MBAP)
-│   │   └── modbus_decoder.py       # Stream decoder + auto-detect
-│   ├── models/
-│   │   ├── data_packet.py          # DataPacket dataclass
-│   │   └── port_config.py          # PortConfig dataclass
-│   ├── controllers/
-│   │   ├── app_controller.py       # Central orchestrator
-│   │   ├── config_manager.py       # JSON config persistence
-│   │   └── data_pump.py            # QTimer-driven buffer drain
-│   ├── views/
-│   │   ├── main_window.py          # QMainWindow + dock layout
-│   │   ├── terminal_view.py        # Terminal send/receive
-│   │   ├── dump_view.py            # HEX dump display
-│   │   ├── table_view.py           # Sortable table
-│   │   ├── line_view.py            # Line-by-line with filter
-│   │   ├── modbus_panel.py         # Modbus request builder
-│   │   ├── port_config_dialog.py   # Port settings dialog
-│   │   ├── preferences_dialog.py   # App preferences
-│   │   ├── export_dialog.py        # Data export config
-│   │   └── status_bar.py           # Connection status bar
-│   ├── utils/
-│   │   ├── formatters.py           # Display formatting
-│   │   └── byte_utils.py           # Byte manipulation
-│   └── resources/
-│       └── styles/
-│           └── default.qss         # Dark theme stylesheet
-└── tests/
-    ├── test_ring_buffer.py
-    ├── test_formatters.py
-    ├── test_config_manager.py
-    ├── test_port_config.py
-    ├── test_modbus_rtu.py
-    ├── test_modbus_ascii.py
-    ├── test_modbus_tcp.py
-    └── test_modbus_decoder.py
-```
+## Configuration
+
+COM-SW persists settings in a JSON config file under the user profile.
+
+Saved settings include:
+
+- Last port and baud rate
+- Port signal preferences such as `DTR` / `RTS`
+- Terminal display mode and font size
+- Table maximum rows
+- Dump formatting preferences
+- Export format and include options
+- Window geometry
 
 ## Running Tests
 
 ```bash
-# Install test dependencies
-pip install pytest pytest-mock
-
-# Run all tests
-python -m pytest tests/ -v
-
-# Run specific test module
-python -m pytest tests/test_modbus_rtu.py -v
+python -m pytest tests -q
 ```
 
-## Development
+Examples:
 
-For virtual serial port testing on Windows, install [com0com](https://sourceforge.net/projects/com0com/) or use a pair of USB-serial adapters with a null-modem cable.
+```bash
+python -m pytest tests/test_config_manager.py -q
+python -m pytest tests/test_ring_buffer.py -q
+```
 
-## License
+## Project Structure
 
-MIT License
+```text
+com-sw/
+├── main.py
+├── run-com-sw.cmd
+├── requirements.txt
+├── README.md
+├── src/
+│   ├── app.py
+│   ├── controllers/
+│   ├── models/
+│   ├── serial/
+│   ├── utils/
+│   └── views/
+└── tests/
+```
+
+## Notes
+
+- The GUI depends on `PySide6`.
+- Serial access depends on `pyserial`.
+- The application uses batched updates to keep the UI responsive during higher-throughput monitoring.

@@ -1,4 +1,4 @@
-"""Dump view — classic hex dump display with address offset and ASCII sidebar.
+"""Dump view - classic hex dump display with address offset and ASCII sidebar.
 
 Similar to xxd, HxD, or WinHex display. Each line shows:
   OFFSET  HEX_BYTES  |ASCII_REPRESENTATION|
@@ -7,7 +7,10 @@ Similar to xxd, HxD, or WinHex display. Each line shows:
 from typing import List
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLabel, QSpinBox, QCheckBox, QPushButton
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLabel,
+    QSpinBox, QCheckBox, QPushButton,
+)
 from PySide6.QtGui import QFont
 
 from src.models.data_packet import DataPacket
@@ -25,7 +28,6 @@ class DumpView(QWidget):
         self._merge_packets = False
         self._current_offset = 0
         self._max_lines = 5000
-        self._line_count = 0
 
         self._setup_ui()
 
@@ -33,9 +35,8 @@ class DumpView(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        # Toolbar
         toolbar = QHBoxLayout()
-        toolbar.addWidget(QLabel("每行字节:"))
+        toolbar.addWidget(QLabel("Bytes/line:"))
 
         self._bytes_spin = QSpinBox()
         self._bytes_spin.setRange(4, 64)
@@ -44,7 +45,7 @@ class DumpView(QWidget):
         self._bytes_spin.valueChanged.connect(self._on_bytes_changed)
         toolbar.addWidget(self._bytes_spin)
 
-        self._offset_cb = QCheckBox("偏移量")
+        self._offset_cb = QCheckBox("Offset")
         self._offset_cb.setChecked(True)
         toolbar.addWidget(self._offset_cb)
 
@@ -52,23 +53,23 @@ class DumpView(QWidget):
         self._ascii_cb.setChecked(True)
         toolbar.addWidget(self._ascii_cb)
 
-        self._merge_cb = QCheckBox("合并数据包")
+        self._merge_cb = QCheckBox("Merge packets")
         self._merge_cb.setChecked(False)
         self._merge_cb.stateChanged.connect(self._on_merge_changed)
         toolbar.addWidget(self._merge_cb)
 
         toolbar.addStretch()
 
-        clear_btn = QPushButton("清空")
+        clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(self.clear)
         toolbar.addWidget(clear_btn)
 
         layout.addLayout(toolbar)
 
-        # Display area
         self._text_display = QTextEdit()
         self._text_display.setReadOnly(True)
         self._text_display.setFont(QFont("Consolas", 10))
+        self._text_display.document().setMaximumBlockCount(self._max_lines)
         self._text_display.setStyleSheet("""
             QTextEdit {
                 background-color: #1E1E1E;
@@ -78,8 +79,7 @@ class DumpView(QWidget):
         """)
         layout.addWidget(self._text_display)
 
-        # Address counter display
-        self._offset_label = QLabel("偏移: 0x00000000")
+        self._offset_label = QLabel("Offset: 0x00000000")
         self._offset_label.setStyleSheet("color: #888;")
         layout.addWidget(self._offset_label)
 
@@ -89,7 +89,6 @@ class DumpView(QWidget):
         for packet in packets:
             data = packet.data
             if self._merge_packets:
-                # Treat as continuous stream
                 for i in range(0, len(data), self._bytes_per_line):
                     chunk = data[i:i + self._bytes_per_line]
                     lines.append(format_dump_line(
@@ -101,7 +100,6 @@ class DumpView(QWidget):
                     ))
                     self._current_offset += len(chunk)
             else:
-                # Each packet as a separate entry
                 for i in range(0, len(data), self._bytes_per_line):
                     chunk = data[i:i + self._bytes_per_line]
                     lines.append(format_dump_line(
@@ -115,23 +113,8 @@ class DumpView(QWidget):
 
         if lines:
             self._text_display.append("\n".join(lines))
-            self._line_count += len(lines)
+            self._offset_label.setText(f"Offset: 0x{self._current_offset:08X}")
 
-            # Trim old lines
-            if self._line_count > self._max_lines:
-                cursor = self._text_display.textCursor()
-                cursor.movePosition(cursor.Start)
-                cursor.movePosition(
-                    cursor.Down, cursor.KeepAnchor,
-                    self._line_count - self._max_lines,
-                )
-                cursor.removeSelectedText()
-                self._line_count = self._max_lines
-
-            # Update offset label
-            self._offset_label.setText(f"偏移: 0x{self._current_offset:08X}")
-
-            # Auto-scroll
             scrollbar = self._text_display.verticalScrollBar()
             scrollbar.setValue(scrollbar.maximum())
 
@@ -146,5 +129,19 @@ class DumpView(QWidget):
     def clear(self) -> None:
         self._text_display.clear()
         self._current_offset = 0
-        self._line_count = 0
-        self._offset_label.setText("偏移: 0x00000000")
+        self._offset_label.setText("Offset: 0x00000000")
+
+    def apply_preferences(self, *, bytes_per_line: int | None = None,
+                          show_offset: bool | None = None, show_ascii: bool | None = None,
+                          font_size: int | None = None) -> None:
+        if bytes_per_line is not None:
+            self._bytes_per_line = bytes_per_line
+            self._bytes_spin.setValue(bytes_per_line)
+        if show_offset is not None:
+            self._show_offset = show_offset
+            self._offset_cb.setChecked(show_offset)
+        if show_ascii is not None:
+            self._show_ascii = show_ascii
+            self._ascii_cb.setChecked(show_ascii)
+        if font_size is not None:
+            self._text_display.setFont(QFont("Consolas", font_size))

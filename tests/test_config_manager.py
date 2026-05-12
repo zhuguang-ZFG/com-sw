@@ -23,6 +23,8 @@ class TestConfigManager:
         config = tmp_config.load()
         assert config["version"] == 1
         assert config["port"]["last_baudrate"] == 9600
+        assert config["display"]["terminal_font_size"] == 10
+        assert config["display"]["table_max_rows"] == 5000
 
     def test_save_and_reload_preserves_values(self, tmp_config):
         tmp_config.load()
@@ -50,6 +52,25 @@ class TestConfigManager:
         assert config["port"]["last_baudrate"] == 38400
         # Missing keys should come from defaults
         assert config["display"]["terminal_mode"] == "ascii"
+        assert config["display"]["terminal_font_size"] == 10
+        assert config["display"]["table_max_rows"] == 5000
+
+    def test_new_display_defaults_merge_into_existing_config(self, tmp_config):
+        tmp_config.load()
+        partial = {
+            "version": 1,
+            "display": {
+                "terminal_mode": "hex",
+            },
+        }
+        with open(tmp_config._config_file, "w", encoding="utf-8") as f:
+            json.dump(partial, f)
+
+        new_mgr = ConfigManager(config_dir=tmp_config._config_dir)
+        config = new_mgr.load()
+        assert config["display"]["terminal_mode"] == "hex"
+        assert config["display"]["terminal_font_size"] == 10
+        assert config["display"]["table_max_rows"] == 5000
 
     def test_corrupt_json_fallback(self, tmp_config):
         """Corrupt file should gracefully fall back to defaults."""

@@ -195,6 +195,33 @@ def test_table_view_focus_packet_index_selects_matching_row() -> None:
     assert view._table.currentRow() == 1
 
 
+def test_table_view_filters_direction_length_and_search() -> None:
+    app = QApplication.instance() or QApplication([])
+    view = TableView()
+    packets = [
+        DataPacket(data=b"A", direction=Direction.RX, timestamp=datetime(2025, 1, 1, 12, 0, 0)),
+        DataPacket(data=b"BCDE", direction=Direction.TX, timestamp=datetime(2025, 1, 1, 12, 0, 1)),
+        DataPacket(data=bytes.fromhex("01 83 02"), direction=Direction.RX, timestamp=datetime(2025, 1, 1, 12, 0, 2)),
+    ]
+
+    view.append_packets(packets)
+    assert view._table.rowCount() == 3
+
+    view._direction_filter.setCurrentText("TX")
+    assert view._table.rowCount() == 1
+    assert view._table.item(0, 1).text() == "TX"
+
+    view._direction_filter.setCurrentText("ALL")
+    view._min_length_filter.setText("4")
+    assert view._table.rowCount() == 1
+    assert view._table.item(0, 2).text() == "4"
+
+    view._min_length_filter.clear()
+    view._search_filter.setText("12:00:02")
+    assert view._table.rowCount() == 1
+    assert view._table.item(0, 3).text() == "..."
+
+
 def test_modbus_analysis_view_search_filters_summary_and_raw_hex() -> None:
     app = QApplication.instance() or QApplication([])
     view = ModbusAnalysisView()

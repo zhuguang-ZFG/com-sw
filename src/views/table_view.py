@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -32,6 +33,7 @@ class TableView(QWidget):
         self._max_rows = 5000
         self._auto_scroll = True
         self._next_packet_index = 0
+        self._rows: List[dict] = []
 
         self._setup_ui()
 
@@ -51,6 +53,26 @@ class TableView(QWidget):
         self._autoscroll_cb.setChecked(True)
         self._autoscroll_cb.stateChanged.connect(self._on_autoscroll_changed)
         toolbar.addWidget(self._autoscroll_cb)
+
+        toolbar.addWidget(QLabel("Direction:"))
+        self._direction_filter = QComboBox()
+        self._direction_filter.addItems(["ALL", "RX", "TX"])
+        self._direction_filter.currentTextChanged.connect(self._apply_filters)
+        toolbar.addWidget(self._direction_filter)
+
+        toolbar.addWidget(QLabel("Min Len:"))
+        self._min_length_filter = QLineEdit()
+        self._min_length_filter.setPlaceholderText("e.g. 4")
+        self._min_length_filter.setMaximumWidth(60)
+        self._min_length_filter.textChanged.connect(self._apply_filters)
+        toolbar.addWidget(self._min_length_filter)
+
+        toolbar.addWidget(QLabel("Search:"))
+        self._search_filter = QLineEdit()
+        self._search_filter.setPlaceholderText("timestamp / data / tooltip")
+        self._search_filter.setMaximumWidth(220)
+        self._search_filter.textChanged.connect(self._apply_filters)
+        toolbar.addWidget(self._search_filter)
 
         toolbar.addStretch()
 
@@ -118,51 +140,27 @@ class TableView(QWidget):
         if not packets:
             return
 
-        sorting_enabled = self._table.isSortingEnabled()
-        self._table.setSortingEnabled(False)
-        self._table.setUpdatesEnabled(False)
-
-        current_rows = self._table.rowCount()
-        self._table.setRowCount(current_rows + len(packets))
-
-        for offset, packet in enumerate(packets):
+        for packet in packets:
             row = format_table_row(packet, display_mode=self._display_mode)
-            table_row = current_rows + offset
-            items = [
-                QTableWidgetItem(row["timestamp"]),
-                QTableWidgetItem(row["direction"]),
-                QTableWidgetItem(row["length"]),
-                QTableWidgetItem(row["data"]),
-            ]
             analysis = analyze_packet(packet)
-            if analysis.is_exception:
-                for item in items:
-                    item.setBackground(QColor("#4A1F1F"))
-                    item.setForeground(QColor("#FFB3B3"))
-                    item.setToolTip(analysis.summary)
-            elif analysis.is_modbus:
-                items[3].setToolTip(analysis.summary)
-
-            items[0].setData(Qt.UserRole, self._next_packet_index)
+            tooltip = analysis.summary if (analysis.is_exception or analysis.is_modbus) else ""
+            self._rows.append({
+                "timestamp": row["timestamp"],
+                "direction": row["direction"],
+                "length": row["length"],
+                "length_value": packet.length,
+                "data": row["data"],
+                "tooltip": tooltip,
+                "is_exception": analysis.is_exception,
+                "packet_index": self._next_packet_index,
+            })
             self._next_packet_index += 1
 
-            for column, item in enumerate(items):
-                self._table.setItem(table_row, column, item)
-
-        overflow_rows = self._table.rowCount() - self._max_rows
+        overflow_rows = len(self._rows) - self._max_rows
         if overflow_rows > 0:
-            self._table.model().removeRows(0, overflow_rows)
+            self._rows = self._rows[overflow_rows:]
 
-        self._table.setUpdatesEnabled(True)
-        self._table.setSortingEnabled(sorting_enabled)
-
-        if self._autoscroll_cb.isChecked():
-            self._table.scrollToBottom()
-
-        self._row_label.setText(f"Rows: {self._table.rowCount()}")
-        self._status_label.setText("Ready")
-        self._status_label.setStyleSheet("color: #888;")
-        self._update_copy_button()
+        self._apply_filters()
 
     def _on_mode_changed(self, mode: str) -> None:
         self._display_mode = mode.lower()
@@ -200,8 +198,12 @@ class TableView(QWidget):
         self._status_label.setStyleSheet("color: #888;")
 
     def clear(self) -> None:
+        self._rows.clear()
         self._table.setRowCount(0)
         self._next_packet_index = 0
+        self._direction_filter.setCurrentText("ALL")
+        self._min_length_filter.clear()
+        self._search_filter.clear()
         self._row_label.setText("Rows: 0")
         self._status_label.setText("No packets yet. Incoming traffic will appear here.")
         self._status_label.setStyleSheet("color: #888;")
@@ -222,6 +224,68 @@ class TableView(QWidget):
         self._status_label.setText(f"Linked packet #{packet_index} is no longer visible")
         self._status_label.setStyleSheet("color: #888;")
         return False
+
+    def _apply_filters(self) -> None:
+        direction_filter = self._direction_filter.currentText()
+        min_length_text = self._min_length_filter.text().strip()
+        search_filter = self._search_filter.text().strip().lower()
+        try:
+            min_length = int(min_length_text) if min_length_text else None
+        except ValueError:
+            min_length = None
+
+        filtered_rows = []
+        for row in self._rows:
+            if direction_filter != "ALL" and row["direction"] != direction_filter:
+                continue
+            if min_length is not None and row["length_value"] < min_length:
+                continue
+            if search_filter:
+                haystack = " ".join([
+                    row["timestamp"],
+                    row["direction"],
+                    row["length"],
+                    row["data"],
+                    row["tooltip"],
+                ]).lower()
+                if search_filter not in haystack:
+                    continue
+            filtered_rows.append(row)
+
+        sorting_enabled = self._table.isSortingEnabled()
+        self._table.setSortingEnabled(False)
+        self._table.setUpdatesEnabled(False)
+        self._table.setRowCount(0)
+
+        for row in filtered_rows:
+            table_row = self._table.rowCount()
+            self._table.insertRow(table_row)
+            items = [
+                QTableWidgetItem(row["timestamp"]),
+                QTableWidgetItem(row["direction"]),
+                QTableWidgetItem(row["length"]),
+                QTableWidgetItem(row["data"]),
+            ]
+            if row["is_exception"]:
+                for item in items:
+                    item.setBackground(QColor("#4A1F1F"))
+                    item.setForeground(QColor("#FFB3B3"))
+                    item.setToolTip(row["tooltip"])
+            elif row["tooltip"]:
+                items[3].setToolTip(row["tooltip"])
+
+            items[0].setData(Qt.UserRole, row["packet_index"])
+            for column, item in enumerate(items):
+                self._table.setItem(table_row, column, item)
+
+        self._table.setUpdatesEnabled(True)
+        self._table.setSortingEnabled(sorting_enabled)
+        if self._autoscroll_cb.isChecked() and self._table.rowCount() > 0:
+            self._table.scrollToBottom()
+        self._row_label.setText(f"Rows: {self._table.rowCount()}")
+        self._status_label.setText("Ready" if filtered_rows else "No matching packets.")
+        self._status_label.setStyleSheet("color: #888;")
+        self._update_copy_button()
 
     def apply_preferences(self, *, display_mode: str | None = None, max_rows: int | None = None,
                           font_size: int | None = None) -> None:

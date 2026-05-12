@@ -97,6 +97,10 @@ class ModbusAnalysisView(QWidget):
         copy_json_btn.clicked.connect(self._copy_selected_json)
         toolbar.addWidget(copy_json_btn)
 
+        copy_filtered_json_btn = QPushButton("Copy Filtered JSON")
+        copy_filtered_json_btn.clicked.connect(self._copy_filtered_json)
+        toolbar.addWidget(copy_filtered_json_btn)
+
         clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(self.clear)
         toolbar.addWidget(clear_btn)
@@ -295,7 +299,7 @@ class ModbusAnalysisView(QWidget):
 
     def export_json(self, file_path: str) -> None:
         entries = self.get_filtered_entries()
-        payload = [self._serialize_entry(entry) for entry in entries]
+        payload = self._serialize_entries(entries)
 
         path = Path(file_path)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -316,6 +320,16 @@ class ModbusAnalysisView(QWidget):
             "highlight": entry["highlight"],
         }
 
+    def _serialize_entries(self, entries: List[dict]) -> List[dict]:
+        return [self._serialize_entry(entry) for entry in entries]
+
+    def _filtered_json_text(self) -> str:
+        return json.dumps(
+            self._serialize_entries(self.get_filtered_entries()),
+            indent=2,
+            ensure_ascii=False,
+        )
+
     def copy_selected_json(self) -> bool:
         row = self._table.currentRow()
         if row < 0:
@@ -326,6 +340,11 @@ class ModbusAnalysisView(QWidget):
         payload = self._serialize_entry(filtered_entries[row])
         clipboard = QApplication.clipboard()
         clipboard.setText(json.dumps(payload, indent=2, ensure_ascii=False))
+        return True
+
+    def copy_filtered_json(self) -> bool:
+        clipboard = QApplication.clipboard()
+        clipboard.setText(self._filtered_json_text())
         return True
 
     def _export_csv(self) -> None:
@@ -366,6 +385,11 @@ class ModbusAnalysisView(QWidget):
             self._status_label.setStyleSheet("color: #888;")
             return
         self._status_label.setText("No analysis row selected to copy")
+        self._status_label.setStyleSheet("color: #888;")
+
+    def _copy_filtered_json(self) -> None:
+        self.copy_filtered_json()
+        self._status_label.setText("Copied filtered analysis as JSON")
         self._status_label.setStyleSheet("color: #888;")
 
     def _append_table_row(self, entry: dict) -> None:

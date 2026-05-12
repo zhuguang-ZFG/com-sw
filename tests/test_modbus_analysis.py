@@ -222,6 +222,32 @@ def test_table_view_filters_direction_length_and_search() -> None:
     assert view._table.item(0, 3).text() == "..."
 
 
+def test_table_view_pause_keeps_collecting_until_jump_latest() -> None:
+    app = QApplication.instance() or QApplication([])
+    view = TableView()
+    first_packets = [
+        DataPacket(data=b"A", direction=Direction.RX, timestamp=datetime(2025, 1, 1, 12, 0, 0)),
+    ]
+    second_packets = [
+        DataPacket(data=b"BC", direction=Direction.TX, timestamp=datetime(2025, 1, 1, 12, 0, 1)),
+    ]
+
+    view.append_packets(first_packets)
+    assert view._table.rowCount() == 1
+
+    view._pause_btn.setChecked(True)
+    view.append_packets(second_packets)
+    assert view._view_paused is True
+    assert view._table.rowCount() == 1
+    assert len(view._rows) == 2
+    assert "view paused" in view._row_label.text().lower()
+
+    view._jump_to_latest()
+    assert view._view_paused is False
+    assert view._table.rowCount() == 2
+    assert view._table.item(1, 1).text() == "TX"
+
+
 def test_modbus_analysis_view_search_filters_summary_and_raw_hex() -> None:
     app = QApplication.instance() or QApplication([])
     view = ModbusAnalysisView()

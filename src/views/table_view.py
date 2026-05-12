@@ -34,6 +34,7 @@ class TableView(QWidget):
         self._auto_scroll = True
         self._next_packet_index = 0
         self._rows: List[dict] = []
+        self._view_paused = False
 
         self._setup_ui()
 
@@ -84,6 +85,16 @@ class TableView(QWidget):
         self._copy_btn = QPushButton("Copy Selected")
         self._copy_btn.clicked.connect(self._copy_selected)
         toolbar.addWidget(self._copy_btn)
+
+        self._pause_btn = QPushButton("Pause View")
+        self._pause_btn.setCheckable(True)
+        self._pause_btn.toggled.connect(self._on_pause_toggled)
+        toolbar.addWidget(self._pause_btn)
+
+        self._jump_latest_btn = QPushButton("Jump to Latest")
+        self._jump_latest_btn.clicked.connect(self._jump_to_latest)
+        self._jump_latest_btn.setEnabled(False)
+        toolbar.addWidget(self._jump_latest_btn)
 
         clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(self.clear)
@@ -160,6 +171,13 @@ class TableView(QWidget):
         if overflow_rows > 0:
             self._rows = self._rows[overflow_rows:]
 
+        if self._view_paused:
+            self._row_label.setText(f"Rows: {len(self._rows)} (view paused)")
+            self._status_label.setText("View paused. New packets are still being captured.")
+            self._status_label.setStyleSheet("color: #888;")
+            self._jump_latest_btn.setEnabled(bool(self._rows))
+            return
+
         self._apply_filters()
 
     def _on_mode_changed(self, mode: str) -> None:
@@ -171,6 +189,26 @@ class TableView(QWidget):
         self._auto_scroll = bool(state)
         self._status_label.setText("Auto-scroll enabled." if self._auto_scroll else "Auto-scroll paused.")
         self._status_label.setStyleSheet("color: #888;")
+
+    def _on_pause_toggled(self, paused: bool) -> None:
+        self._view_paused = paused
+        self._pause_btn.setText("Resume View" if paused else "Pause View")
+        self._jump_latest_btn.setEnabled(bool(self._rows))
+        if paused:
+            self._row_label.setText(f"Rows: {len(self._rows)} (view paused)")
+            self._status_label.setText("View paused. New packets are still being captured.")
+            self._status_label.setStyleSheet("color: #888;")
+            return
+        self._apply_filters()
+
+    def _jump_to_latest(self) -> None:
+        if self._view_paused:
+            self._pause_btn.setChecked(False)
+            return
+        if self._table.rowCount() > 0:
+            self._table.scrollToBottom()
+            self._status_label.setText("Jumped to latest packet.")
+            self._status_label.setStyleSheet("color: #888;")
 
     def _update_copy_button(self) -> None:
         has_selection = bool(self._table.selectedRanges())
@@ -201,6 +239,10 @@ class TableView(QWidget):
         self._rows.clear()
         self._table.setRowCount(0)
         self._next_packet_index = 0
+        self._view_paused = False
+        self._pause_btn.setChecked(False)
+        self._pause_btn.setText("Pause View")
+        self._jump_latest_btn.setEnabled(False)
         self._direction_filter.setCurrentText("ALL")
         self._min_length_filter.clear()
         self._search_filter.clear()
@@ -285,6 +327,7 @@ class TableView(QWidget):
         self._row_label.setText(f"Rows: {self._table.rowCount()}")
         self._status_label.setText("Ready" if filtered_rows else "No matching packets.")
         self._status_label.setStyleSheet("color: #888;")
+        self._jump_latest_btn.setEnabled(self._table.rowCount() > 0)
         self._update_copy_button()
 
     def apply_preferences(self, *, display_mode: str | None = None, max_rows: int | None = None,

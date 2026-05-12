@@ -7,7 +7,7 @@ atomically drains all pending data.
 
 import threading
 from collections import deque
-from typing import List, Optional
+from typing import List
 
 from src.models.data_packet import DataPacket
 
@@ -41,10 +41,10 @@ class RingBuffer:
         with self._lock:
             if not self._buffer:
                 return []
-            drained = list(self._buffer)
-            self._buffer.clear()
+            drained = self._buffer
+            self._buffer = deque()
             self._overflow_count = 0
-            return drained
+            return list(drained)
 
     def peek(self) -> List[DataPacket]:
         """View all packets without removing them."""

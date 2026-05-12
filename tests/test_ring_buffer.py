@@ -1,4 +1,4 @@
-"""Tests for RingBuffer — the thread-safe data structure at the heart of the pipeline."""
+"""Tests for RingBuffer - the thread-safe data structure at the heart of the pipeline."""
 
 import pytest
 import threading
@@ -24,7 +24,6 @@ class TestRingBuffer:
         assert len(drained) == 5
         assert drained[0].data == b"\x00"
         assert drained[4].data == b"\x04"
-        # Buffer should now be empty
         assert buf.length == 0
 
     def test_drain_empty_returns_empty_list(self):
@@ -39,8 +38,19 @@ class TestRingBuffer:
         buf.append(make_packet(1))
         drained = buf.drain()
         assert len(drained) == 2
-        # Second drain should return empty
         assert buf.drain() == []
+
+    def test_drain_preserves_new_appends(self):
+        """Packets appended after a drain stay in the active buffer."""
+        buf = RingBuffer()
+        buf.append(make_packet(0))
+
+        first = buf.drain()
+        buf.append(make_packet(1))
+        second = buf.drain()
+
+        assert [packet.data for packet in first] == [b"\x00"]
+        assert [packet.data for packet in second] == [b"\x01"]
 
     def test_max_size_enforcement(self):
         """When max_size is exceeded, oldest entries are dropped."""
@@ -48,20 +58,18 @@ class TestRingBuffer:
         buf.append(make_packet(0))
         buf.append(make_packet(1))
         buf.append(make_packet(2))
-        buf.append(make_packet(3))  # Overflow, drops packet 0
+        buf.append(make_packet(3))
         drained = buf.drain()
         assert len(drained) == 3
-        # Oldest (packet 0) should be gone
         assert drained[0].data == b"\x01"
 
     def test_overflow_count(self):
         buf = RingBuffer(max_size=2)
         buf.append(make_packet(0))
         buf.append(make_packet(1))
-        buf.append(make_packet(2))  # Overflow
-        buf.append(make_packet(3))  # Overflow
+        buf.append(make_packet(2))
+        buf.append(make_packet(3))
         assert buf.overflow_count == 2
-        # Drain resets overflow count
         buf.drain()
         assert buf.overflow_count == 0
 
@@ -71,7 +79,7 @@ class TestRingBuffer:
         assert buf.length == 1
         peeked = buf.peek()
         assert len(peeked) == 1
-        assert buf.length == 1  # Still there after peek
+        assert buf.length == 1
 
     def test_clear(self):
         buf = RingBuffer()
@@ -84,11 +92,11 @@ class TestRingBuffer:
     def test_thread_safety(self):
         """Two threads appending simultaneously should not lose data."""
         buf = RingBuffer(max_size=1000)
-        N = 500
+        n_packets = 500
 
         def writer(offset: int):
-            for i in range(N):
-                buf.append(make_packet(offset * N + i))
+            for i in range(n_packets):
+                buf.append(make_packet(offset * n_packets + i))
 
         t1 = threading.Thread(target=writer, args=(0,))
         t2 = threading.Thread(target=writer, args=(1,))
@@ -98,4 +106,4 @@ class TestRingBuffer:
         t2.join()
 
         total = buf.length
-        assert total == N * 2, f"Expected {N*2}, got {total}"
+        assert total == n_packets * 2, f"Expected {n_packets * 2}, got {total}"

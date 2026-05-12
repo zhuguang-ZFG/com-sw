@@ -74,14 +74,15 @@ def test_modbus_analysis_view_exports_filtered_entries(tmp_path: Path) -> None:
     view = ModbusAnalysisView()
     view.add_entry("12:00:00.000", "RX", 1, 0x03, None, "Frame", "normal", False)
     view.add_entry("12:00:00.100", "RX", 2, 0x04, 100, "Paired Exception", "error", True)
+    view.add_entry_details("02 84 02", 0x02)
     view._exceptions_only_cb.setChecked(True)
 
     export_path = tmp_path / "analysis.csv"
     view.export_csv(str(export_path))
 
     content = export_path.read_text(encoding="utf-8")
-    assert "timestamp,direction,slave,function,latency_ms,status,summary" in content
-    assert "12:00:00.100,RX,2,0x04,100,Paired Exception,error" in content
+    assert "timestamp,direction,slave,function,latency_ms,status,summary,exception_code,raw_hex" in content
+    assert "12:00:00.100,RX,2,0x04,100,Paired Exception,error,0x02,02 84 02" in content
     assert "12:00:00.000,RX,1,0x03" not in content
 
 

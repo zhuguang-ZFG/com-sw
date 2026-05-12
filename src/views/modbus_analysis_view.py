@@ -254,7 +254,17 @@ class ModbusAnalysisView(QWidget):
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", encoding="utf-8", newline="") as handle:
             writer = csv.writer(handle)
-            writer.writerow(["timestamp", "direction", "slave", "function", "latency_ms", "status", "summary"])
+            writer.writerow([
+                "timestamp",
+                "direction",
+                "slave",
+                "function",
+                "latency_ms",
+                "status",
+                "summary",
+                "exception_code",
+                "raw_hex",
+            ])
             for entry in entries:
                 writer.writerow([
                     entry["timestamp"],
@@ -264,6 +274,8 @@ class ModbusAnalysisView(QWidget):
                     "" if entry["latency_ms"] is None else entry["latency_ms"],
                     entry["status"],
                     entry["summary"],
+                    "" if entry.get("exception_code") is None else f"0x{entry['exception_code']:02X}",
+                    entry.get("raw_hex", ""),
                 ])
 
     def _export_csv(self) -> None:

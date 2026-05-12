@@ -139,10 +139,15 @@ def test_modbus_analysis_view_updates_stats_for_filtered_entries() -> None:
     assert "Total: 3" in view._stats_label.text()
     assert "Exceptions: 1" in view._stats_label.text()
     assert "Paired: 2" in view._stats_label.text()
+    assert "Min Latency: 50 ms" in view._stats_label.text()
+    assert "Max Latency: 100 ms" in view._stats_label.text()
     assert "Avg Latency: 75.0 ms" in view._stats_label.text()
 
     view._exceptions_only_cb.setChecked(True)
-    assert view._stats_label.text() == "Total: 1 | Exceptions: 1 | Paired: 1 | Avg Latency: 100.0 ms"
+    assert view._stats_label.text() == (
+        "Total: 1 | Exceptions: 1 | Paired: 1 | Min Latency: 100 ms | "
+        "Max Latency: 100 ms | Avg Latency: 100.0 ms"
+    )
 
 
 def test_modbus_analysis_view_restores_filter_state() -> None:

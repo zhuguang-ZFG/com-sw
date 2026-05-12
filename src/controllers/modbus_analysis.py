@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
+from src.utils.formatters import format_timestamp
+
 from src.models.data_packet import DataPacket
 from src.protocol.modbus_rtu import decode_rtu_frame
 
@@ -26,6 +28,18 @@ class ModbusPairingResult:
     is_exception: bool = False
 
 
+@dataclass
+class ModbusDisplayEntry:
+    timestamp: str
+    direction: str
+    slave_id: int
+    function_code: int
+    latency_ms: int | None
+    status: str
+    summary: str
+    highlight: bool = False
+
+
 def analyze_packet(packet: DataPacket) -> ModbusAnalysisResult:
     frame = decode_rtu_frame(packet.data)
     if frame is None:
@@ -41,6 +55,19 @@ def analyze_packet(packet: DataPacket) -> ModbusAnalysisResult:
         summary=summary,
         slave_id=frame.slave_id,
         function_code=function_code,
+    )
+
+
+def packet_to_display_entry(packet: DataPacket, analysis: ModbusAnalysisResult) -> ModbusDisplayEntry:
+    return ModbusDisplayEntry(
+        timestamp=format_timestamp(packet.timestamp, mode="time_only"),
+        direction=packet.direction.value,
+        slave_id=analysis.slave_id,
+        function_code=analysis.function_code,
+        latency_ms=None,
+        status="Exception" if analysis.is_exception else "Frame",
+        summary=analysis.summary,
+        highlight=analysis.is_exception,
     )
 
 

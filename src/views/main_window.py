@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 from src.models.port_config import PortConfig
 from src.views.dump_view import DumpView
 from src.views.line_view import LineView
+from src.views.modbus_analysis_view import ModbusAnalysisView
 from src.views.modbus_panel import ModbusPanel
 from src.views.status_bar import StatusBar
 from src.views.table_view import TableView
@@ -64,6 +65,13 @@ class MainWindow(QMainWindow):
         self._modbus_dock.setWidget(self._modbus_panel)
         self._modbus_dock.setVisible(False)
         self.addDockWidget(Qt.RightDockWidgetArea, self._modbus_dock)
+
+        self._modbus_analysis_view = ModbusAnalysisView()
+        self._modbus_analysis_dock = QDockWidget("Modbus Analysis", self)
+        self._modbus_analysis_dock.setObjectName("modbus_analysis_dock")
+        self._modbus_analysis_dock.setWidget(self._modbus_analysis_view)
+        self._modbus_analysis_dock.setVisible(False)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self._modbus_analysis_dock)
 
         self._status_bar = StatusBar()
         self.setStatusBar(self._status_bar)
@@ -204,6 +212,16 @@ class MainWindow(QMainWindow):
         view_menu.addAction(self._modbus_action)
         self._modbus_dock.visibilityChanged.connect(self._modbus_action.setChecked)
 
+        self._modbus_analysis_action = QAction("Modbus Analysis", self)
+        self._modbus_analysis_action.setCheckable(True)
+        self._modbus_analysis_action.triggered.connect(
+            lambda checked: self._modbus_analysis_dock.setVisible(checked)
+        )
+        view_menu.addAction(self._modbus_analysis_action)
+        self._modbus_analysis_dock.visibilityChanged.connect(
+            self._modbus_analysis_action.setChecked
+        )
+
         view_menu.addSeparator()
 
         clear_action = QAction("Clear Current View", self)
@@ -247,6 +265,10 @@ class MainWindow(QMainWindow):
     @property
     def modbus_panel(self) -> ModbusPanel:
         return self._modbus_panel
+
+    @property
+    def modbus_analysis_view(self) -> ModbusAnalysisView:
+        return self._modbus_analysis_view
 
     @property
     def status_bar(self) -> StatusBar:

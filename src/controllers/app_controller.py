@@ -17,7 +17,11 @@ from PySide6.QtWidgets import QMessageBox, QFileDialog
 
 from src.controllers.config_manager import ConfigManager
 from src.controllers.data_pump import DataPump
-from src.controllers.modbus_analysis import ModbusPairingTracker, analyze_packet
+from src.controllers.modbus_analysis import (
+    ModbusPairingTracker,
+    analyze_packet,
+    packet_to_display_entry,
+)
 from src.controllers.session_replay_controller import SessionReplayController
 from src.controllers.session_recorder import SessionRecorder, load_session
 from src.models.data_packet import DataPacket
@@ -370,14 +374,41 @@ class AppController(QObject):
         self.main_window.dump_view.clear()
         self.main_window.table_view.clear()
         self.main_window.line_view.clear()
+        self.main_window.modbus_analysis_view.clear()
         self.main_window.status_bar.reset_counters()
         self.main_window.status_bar.clear_replay_status()
         self._modbus_pairing.reset()
 
     def _update_modbus_hint(self, packets: List[DataPacket]) -> None:
+        for packet in packets:
+            analysis = analyze_packet(packet)
+            if analysis.is_modbus:
+                entry = packet_to_display_entry(packet, analysis)
+                self.main_window.modbus_analysis_view.add_entry(
+                    entry.timestamp,
+                    entry.direction,
+                    entry.slave_id,
+                    entry.function_code,
+                    entry.latency_ms,
+                    entry.status,
+                    entry.summary,
+                    entry.highlight,
+                )
+
         for packet in reversed(packets):
             pairing = self._modbus_pairing.observe(packet)
             if pairing.matched:
+                analysis = analyze_packet(packet)
+                self.main_window.modbus_analysis_view.add_entry(
+                    packet.timestamp.strftime("%H:%M:%S.%f")[:-3],
+                    packet.direction.value,
+                    analysis.slave_id,
+                    analysis.function_code,
+                    pairing.latency_ms,
+                    "Paired Exception" if pairing.is_exception else "Paired Response",
+                    pairing.summary,
+                    pairing.is_exception,
+                )
                 if pairing.is_exception:
                     self.main_window.status_bar.set_hint(f"Modbus response exception: {pairing.summary}")
                 else:

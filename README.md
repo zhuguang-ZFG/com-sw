@@ -19,6 +19,7 @@ A lightweight serial communication debugging and monitoring tool built with Pyth
 - Session recording and replay via `JSONL`
 - Replay playback controls with pause, stop, and speed options
 - Replay-time Modbus RTU exception highlighting and quick analysis hints
+- Dedicated `Modbus Analysis` dock for decoded frames and paired responses
 - Persistent preferences for display and port settings
 - Dark theme optimized for long sessions
 

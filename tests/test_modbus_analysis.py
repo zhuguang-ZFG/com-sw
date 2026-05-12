@@ -95,3 +95,20 @@ def test_modbus_analysis_view_shows_selected_entry_details() -> None:
     assert "Direction: RX" in detail
     assert "Latency: 25 ms" in detail
     assert "Raw HEX: 01 03 04 00 0A 00 14" in detail
+
+
+def test_modbus_analysis_view_search_filters_summary_and_raw_hex() -> None:
+    app = QApplication.instance() or QApplication([])
+    view = ModbusAnalysisView()
+    view.add_entry("12:00:00.000", "RX", 1, 0x03, None, "Frame", "holding registers", False)
+    view.add_entry_details("01 03 04 00 0A 00 14", None)
+    view.add_entry("12:00:00.200", "TX", 2, 0x06, None, "Frame", "write single register", False)
+    view.add_entry_details("02 06 00 01 00 FF", None)
+
+    view._search_filter.setText("holding")
+    assert view._table.rowCount() == 1
+    assert view._table.item(0, 6).text() == "holding registers"
+
+    view._search_filter.setText("00 ff")
+    assert view._table.rowCount() == 1
+    assert view._table.item(0, 1).text() == "TX"

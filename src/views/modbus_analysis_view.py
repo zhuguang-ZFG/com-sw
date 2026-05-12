@@ -60,6 +60,13 @@ class ModbusAnalysisView(QWidget):
         self._function_filter.textChanged.connect(self._apply_filters)
         toolbar.addWidget(self._function_filter)
 
+        toolbar.addWidget(QLabel("Search:"))
+        self._search_filter = QLineEdit()
+        self._search_filter.setPlaceholderText("summary / status / raw hex")
+        self._search_filter.setMaximumWidth(220)
+        self._search_filter.textChanged.connect(self._apply_filters)
+        toolbar.addWidget(self._search_filter)
+
         toolbar.addStretch()
 
         export_btn = QPushButton("Export CSV")
@@ -147,22 +154,7 @@ class ModbusAnalysisView(QWidget):
         self._apply_filters()
 
     def _apply_filters(self) -> None:
-        exception_only = self._exceptions_only_cb.isChecked()
-        paired_only = self._paired_only_cb.isChecked()
-        slave_filter = self._slave_filter.text().strip()
-        function_filter = self._function_filter.text().strip().lower().removeprefix("0x")
-
-        filtered_entries = []
-        for entry in self._entries:
-            if exception_only and not entry["highlight"]:
-                continue
-            if paired_only and "Paired" not in entry["status"]:
-                continue
-            if slave_filter and str(entry["slave"]) != slave_filter:
-                continue
-            if function_filter and f"{entry['function']:02x}" != function_filter:
-                continue
-            filtered_entries.append(entry)
+        filtered_entries = self.get_filtered_entries()
 
         self._table.setRowCount(0)
         for entry in filtered_entries:
@@ -177,6 +169,7 @@ class ModbusAnalysisView(QWidget):
         paired_only = self._paired_only_cb.isChecked()
         slave_filter = self._slave_filter.text().strip()
         function_filter = self._function_filter.text().strip().lower().removeprefix("0x")
+        search_filter = self._search_filter.text().strip().lower()
 
         filtered_entries = []
         for entry in self._entries:
@@ -188,6 +181,19 @@ class ModbusAnalysisView(QWidget):
                 continue
             if function_filter and f"{entry['function']:02x}" != function_filter:
                 continue
+            if search_filter:
+                haystack = " ".join([
+                    entry["timestamp"],
+                    entry["direction"],
+                    str(entry["slave"]),
+                    f"0x{entry['function']:02X}",
+                    "" if entry["latency_ms"] is None else str(entry["latency_ms"]),
+                    entry["status"],
+                    entry["summary"],
+                    entry.get("raw_hex", ""),
+                ]).lower()
+                if search_filter not in haystack:
+                    continue
             filtered_entries.append(entry)
         return filtered_entries
 
@@ -298,3 +304,4 @@ class ModbusAnalysisView(QWidget):
         self._status_label.setStyleSheet("color: #888;")
         self._detail_label.setText("Select an analysis row to inspect raw frame details.")
         self._detail_text.clear()
+        self._search_filter.clear()

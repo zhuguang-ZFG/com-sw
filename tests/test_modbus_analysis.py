@@ -2,6 +2,8 @@
 
 from datetime import datetime
 
+from PySide6.QtWidgets import QApplication
+
 from src.controllers.modbus_analysis import (
     ModbusPairingTracker,
     analyze_packet,
@@ -9,6 +11,27 @@ from src.controllers.modbus_analysis import (
 )
 from src.models.data_packet import DataPacket, Direction
 from src.protocol.modbus_rtu import encode_rtu_frame
+from src.views.modbus_analysis_view import ModbusAnalysisView
+
+
+def test_modbus_analysis_view_filters_entries() -> None:
+    app = QApplication.instance() or QApplication([])
+    view = ModbusAnalysisView()
+    view.add_entry("12:00:00.000", "RX", 1, 0x03, None, "Frame", "normal", False)
+    view.add_entry("12:00:00.100", "RX", 1, 0x03, 100, "Paired Exception", "error", True)
+    assert view._table.rowCount() == 2
+
+    view._exceptions_only_cb.setChecked(True)
+    assert view._table.rowCount() == 1
+
+    view._exceptions_only_cb.setChecked(False)
+    view._paired_only_cb.setChecked(True)
+    assert view._table.rowCount() == 1
+
+    view._paired_only_cb.setChecked(False)
+    view._slave_filter.setText("1")
+    view._function_filter.setText("03")
+    assert view._table.rowCount() == 2
 
 
 def test_packet_to_display_entry_uses_analysis_values() -> None:

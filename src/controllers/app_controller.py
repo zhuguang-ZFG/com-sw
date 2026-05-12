@@ -128,6 +128,9 @@ class AppController(QObject):
         self.main_window.modbus_panel.send_requested.connect(
             self._on_modbus_send
         )
+        self.main_window.modbus_analysis_view.focus_packet_requested.connect(
+            self.main_window.table_view.focus_packet_index
+        )
 
         # === Window close ===
         self.main_window.destroyed.connect(self._on_shutdown)
@@ -380,9 +383,12 @@ class AppController(QObject):
         self._modbus_pairing.reset()
 
     def _update_modbus_hint(self, packets: List[DataPacket]) -> None:
+        base_packet_index = self.main_window.table_view._next_packet_index - len(packets)
         for packet in packets:
             analysis = analyze_packet(packet)
             if analysis.is_modbus:
+                packet_index = base_packet_index
+                base_packet_index += 1
                 entry = packet_to_display_entry(packet, analysis)
                 self.main_window.modbus_analysis_view.add_entry(
                     entry.timestamp,
@@ -393,16 +399,20 @@ class AppController(QObject):
                     entry.status,
                     entry.summary,
                     entry.highlight,
+                    packet_index,
                 )
                 self.main_window.modbus_analysis_view.add_entry_details(
                     entry.raw_hex,
                     entry.exception_code,
                 )
+            else:
+                base_packet_index += 1
 
         for packet in reversed(packets):
             pairing = self._modbus_pairing.observe(packet)
             if pairing.matched:
                 analysis = analyze_packet(packet)
+                packet_index = (self.main_window.table_view._next_packet_index - len(packets)) + packets.index(packet)
                 self.main_window.modbus_analysis_view.add_entry(
                     packet.timestamp.strftime("%H:%M:%S.%f")[:-3],
                     packet.direction.value,
@@ -412,6 +422,7 @@ class AppController(QObject):
                     "Paired Exception" if pairing.is_exception else "Paired Response",
                     pairing.summary,
                     pairing.is_exception,
+                    packet_index,
                 )
                 self.main_window.modbus_analysis_view.add_entry_details(
                     packet.hex_str,

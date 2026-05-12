@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import List
 
+from PySide6.QtCore import Signal
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QApplication,
@@ -40,6 +41,8 @@ class NumericTableWidgetItem(QTableWidgetItem):
 
 class ModbusAnalysisView(QWidget):
     """Tabular Modbus analysis results."""
+
+    focus_packet_requested = Signal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -143,6 +146,7 @@ class ModbusAnalysisView(QWidget):
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(6, QHeaderView.Stretch)
         self._table.itemSelectionChanged.connect(self._update_detail_panel)
+        self._table.cellDoubleClicked.connect(self._on_row_double_clicked)
 
         layout.addWidget(self._table)
 
@@ -166,6 +170,7 @@ class ModbusAnalysisView(QWidget):
         status: str,
         summary: str,
         highlight: bool = False,
+        frame_index: int | None = None,
     ) -> None:
         self._entries.append({
             "timestamp": timestamp,
@@ -178,6 +183,7 @@ class ModbusAnalysisView(QWidget):
             "raw_hex": "",
             "exception_code": None,
             "highlight": highlight,
+            "frame_index": frame_index,
         })
         self._apply_filters()
 
@@ -390,6 +396,19 @@ class ModbusAnalysisView(QWidget):
     def _copy_filtered_json(self) -> None:
         self.copy_filtered_json()
         self._status_label.setText("Copied filtered analysis as JSON")
+        self._status_label.setStyleSheet("color: #888;")
+
+    def _on_row_double_clicked(self, row: int, _column: int) -> None:
+        filtered_entries = self.get_filtered_entries()
+        if row < 0 or row >= len(filtered_entries):
+            return
+        frame_index = filtered_entries[row].get("frame_index")
+        if frame_index is None:
+            self._status_label.setText("No linked frame available for this analysis row")
+            self._status_label.setStyleSheet("color: #888;")
+            return
+        self.focus_packet_requested.emit(frame_index)
+        self._status_label.setText(f"Focused linked frame #{frame_index}")
         self._status_label.setStyleSheet("color: #888;")
 
     def _append_table_row(self, entry: dict) -> None:

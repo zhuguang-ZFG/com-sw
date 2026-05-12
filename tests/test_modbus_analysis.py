@@ -15,6 +15,7 @@ from src.controllers.modbus_analysis import (
 from src.models.data_packet import DataPacket, Direction
 from src.protocol.modbus_rtu import encode_rtu_frame
 from src.views.modbus_analysis_view import ModbusAnalysisView
+from src.views.table_view import TableView
 
 
 def test_modbus_analysis_view_filters_entries() -> None:
@@ -165,6 +166,33 @@ def test_modbus_analysis_view_shows_selected_entry_details() -> None:
     assert "Direction: RX" in detail
     assert "Latency: 25 ms" in detail
     assert "Raw HEX: 01 03 04 00 0A 00 14" in detail
+
+
+def test_modbus_analysis_view_emits_focus_request_on_double_click() -> None:
+    app = QApplication.instance() or QApplication([])
+    view = ModbusAnalysisView()
+    requested = []
+    view.focus_packet_requested.connect(requested.append)
+    view.add_entry("12:00:00.100", "RX", 1, 0x03, 25, "Paired Response", "ok", False, 7)
+    view.add_entry_details("01 03 04 00 0A 00 14", None)
+
+    view._on_row_double_clicked(0, 0)
+
+    assert requested == [7]
+
+
+def test_table_view_focus_packet_index_selects_matching_row() -> None:
+    app = QApplication.instance() or QApplication([])
+    view = TableView()
+    packets = [
+        DataPacket(data=b"A", direction=Direction.RX, timestamp=datetime(2025, 1, 1, 12, 0, 0)),
+        DataPacket(data=b"B", direction=Direction.TX, timestamp=datetime(2025, 1, 1, 12, 0, 1)),
+    ]
+
+    view.append_packets(packets)
+
+    assert view.focus_packet_index(1) is True
+    assert view._table.currentRow() == 1
 
 
 def test_modbus_analysis_view_search_filters_summary_and_raw_hex() -> None:

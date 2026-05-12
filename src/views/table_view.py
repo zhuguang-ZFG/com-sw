@@ -31,6 +31,7 @@ class TableView(QWidget):
         self._display_mode = "ascii"
         self._max_rows = 5000
         self._auto_scroll = True
+        self._next_packet_index = 0
 
         self._setup_ui()
 
@@ -142,6 +143,9 @@ class TableView(QWidget):
             elif analysis.is_modbus:
                 items[3].setToolTip(analysis.summary)
 
+            items[0].setData(Qt.UserRole, self._next_packet_index)
+            self._next_packet_index += 1
+
             for column, item in enumerate(items):
                 self._table.setItem(table_row, column, item)
 
@@ -197,10 +201,27 @@ class TableView(QWidget):
 
     def clear(self) -> None:
         self._table.setRowCount(0)
+        self._next_packet_index = 0
         self._row_label.setText("Rows: 0")
         self._status_label.setText("No packets yet. Incoming traffic will appear here.")
         self._status_label.setStyleSheet("color: #888;")
         self._update_copy_button()
+
+    def focus_packet_index(self, packet_index: int) -> bool:
+        for row in range(self._table.rowCount()):
+            item = self._table.item(row, 0)
+            if item is None:
+                continue
+            if item.data(Qt.UserRole) == packet_index:
+                self._table.selectRow(row)
+                self._table.setCurrentCell(row, 0)
+                self._table.scrollToItem(item)
+                self._status_label.setText(f"Focused packet row {row + 1}")
+                self._status_label.setStyleSheet("color: #888;")
+                return True
+        self._status_label.setText(f"Linked packet #{packet_index} is no longer visible")
+        self._status_label.setStyleSheet("color: #888;")
+        return False
 
     def apply_preferences(self, *, display_mode: str | None = None, max_rows: int | None = None,
                           font_size: int | None = None) -> None:

@@ -191,6 +191,8 @@ class AppController(QObject):
 
     def _on_port_error(self, message: str) -> None:
         """Port error occurred."""
+        self._runtime_metrics.record_error(message)
+        self._refresh_runtime_metrics_view()
         self.main_window.status_bar.set_error(message)
 
     # ---- Data Flow ----------------------------------------------------------------
@@ -558,6 +560,8 @@ class AppController(QObject):
                         f.write(line + "\n")
         except Exception as e:
             logger.error(f"Export write error: {e}")
+            self._runtime_metrics.record_error(f"Export write error: {e}")
+            self._refresh_runtime_metrics_view()
 
     # ---- Shutdown -----------------------------------------------------------------
 

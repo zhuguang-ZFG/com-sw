@@ -35,6 +35,7 @@ class DiagnosticsView(QWidget):
             else "-"
         )
         recent_errors = snapshot.recent_errors or ["- none"]
+        recent_events = snapshot.recent_events or ["- none"]
         self._summary_label.setText(
             f"Packets {snapshot.packets_processed} | {snapshot.bytes_per_second:.1f} B/s | Dropped {snapshot.dropped_packets}"
         )
@@ -55,6 +56,8 @@ class DiagnosticsView(QWidget):
                     f"Replay position: {snapshot.replay_index}/{snapshot.replay_loaded_packets}",
                     f"Replay speed: {snapshot.replay_speed:.1f}x",
                     f"Last packet at: {last_packet}",
+                    "Recent events:",
+                    *recent_events,
                     "Recent errors:",
                     *recent_errors,
                 ]

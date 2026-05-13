@@ -27,6 +27,7 @@ class RuntimeMetricsSnapshot:
     replay_speed: float
     last_packet_at: datetime | None
     recent_errors: list[str]
+    recent_events: list[str]
 
 
 class RuntimeMetrics:
@@ -49,6 +50,7 @@ class RuntimeMetrics:
         self._replay_speed = 1.0
         self._last_packet_at: datetime | None = None
         self._recent_errors: list[str] = []
+        self._recent_events: list[str] = []
 
     def record_packets(self, packets: Iterable[DataPacket]) -> None:
         packet_list = list(packets)
@@ -79,6 +81,11 @@ class RuntimeMetrics:
         self._recent_errors.append(f"[{timestamp}] {message}")
         self._recent_errors = self._recent_errors[-5:]
 
+    def record_event(self, message: str, when: datetime | None = None) -> None:
+        timestamp = (when or datetime.now()).strftime("%H:%M:%S")
+        self._recent_events.append(f"[{timestamp}] {message}")
+        self._recent_events = self._recent_events[-12:]
+
     def snapshot(self, now: datetime | None = None) -> RuntimeMetricsSnapshot:
         snapshot_time = now or datetime.now()
         elapsed_seconds = max((snapshot_time - self._started_at).total_seconds(), 0.001)
@@ -100,4 +107,5 @@ class RuntimeMetrics:
             replay_speed=self._replay_speed,
             last_packet_at=self._last_packet_at,
             recent_errors=list(self._recent_errors),
+            recent_events=list(self._recent_events),
         )

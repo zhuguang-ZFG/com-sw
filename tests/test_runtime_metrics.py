@@ -37,6 +37,7 @@ def test_runtime_metrics_track_drops_and_replay_state() -> None:
     metrics.record_dropped_packets(3)
     metrics.set_replay_state(current=4, total=10, speed=2.0)
     metrics.record_error("Send failed", when=datetime(2025, 1, 1, 12, 0, 3))
+    metrics.record_event("Replay started", when=datetime(2025, 1, 1, 12, 0, 2))
 
     snapshot = metrics.snapshot()
     assert snapshot.dropped_packets == 3
@@ -44,6 +45,7 @@ def test_runtime_metrics_track_drops_and_replay_state() -> None:
     assert snapshot.replay_loaded_packets == 10
     assert snapshot.replay_speed == 2.0
     assert snapshot.recent_errors[-1].endswith("Send failed")
+    assert snapshot.recent_events[-1].endswith("Replay started")
 
 
 def test_runtime_metrics_reset_clears_counters() -> None:
@@ -57,3 +59,4 @@ def test_runtime_metrics_reset_clears_counters() -> None:
     assert snapshot.dropped_packets == 0
     assert snapshot.last_packet_at is None
     assert snapshot.recent_errors == []
+    assert snapshot.recent_events == []

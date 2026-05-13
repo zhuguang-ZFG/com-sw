@@ -175,6 +175,8 @@ class AppController(QObject):
             self.main_window.status_bar.set_connected(port_name, config.settings_str)
         self.main_window.set_connected_ui(True)
         self.main_window.status_bar.clear_buffer_warning()
+        self._runtime_metrics.record_event(f"Connected to {port_name}")
+        self._refresh_runtime_metrics_view()
         self.main_window.status_bar.set_hint(f"Connected to {port_name}.")
 
         # Save last port
@@ -186,6 +188,8 @@ class AppController(QObject):
         self._is_connected = False
         self.main_window.status_bar.set_disconnected()
         self.main_window.status_bar.clear_buffer_warning()
+        self._runtime_metrics.record_event(f"Disconnected from {port_name}")
+        self._refresh_runtime_metrics_view()
         self.main_window.set_connected_ui(False)
         self.main_window.status_bar.set_hint(f"Disconnected from {port_name}.")
 
@@ -229,6 +233,9 @@ class AppController(QObject):
     def _on_backlog_detected(self, dropped_packets: int) -> None:
         """Reflect ring-buffer overflow in the UI."""
         self._runtime_metrics.record_dropped_packets(dropped_packets)
+        self._runtime_metrics.record_event(
+            f"Backlog detected; dropped {dropped_packets} packet(s)"
+        )
         self._refresh_runtime_metrics_view()
         self.main_window.status_bar.set_buffer_warning(dropped_packets)
 
@@ -304,6 +311,10 @@ class AppController(QObject):
                 },
             )
             self.start_export(export["file_path"], export["format"])
+            self._runtime_metrics.record_event(
+                f"Export started: {export['file_path']} ({export['format']})"
+            )
+            self._refresh_runtime_metrics_view()
             self.main_window.status_bar.set_hint(f"Exporting to {export['file_path']}")
 
     def _start_recording(self) -> None:
@@ -320,6 +331,8 @@ class AppController(QObject):
             return
         self._session_recorder.start(file_path)
         self._update_config_section("recording", {"last_session_file": file_path})
+        self._runtime_metrics.record_event(f"Recording started: {file_path}")
+        self._refresh_runtime_metrics_view()
         self.main_window.status_bar.set_hint(f"Recording session to {file_path}")
 
     def _stop_recording(self) -> None:
@@ -328,6 +341,8 @@ class AppController(QObject):
             return
         file_path = self._session_recorder.file_path
         self._session_recorder.stop()
+        self._runtime_metrics.record_event(f"Recording stopped: {file_path}")
+        self._refresh_runtime_metrics_view()
         self.main_window.status_bar.set_hint(f"Recording saved to {file_path}")
 
     def _replay_session(self) -> None:
@@ -344,6 +359,10 @@ class AppController(QObject):
         self._prepare_replay_view()
         self._replay_controller.load(packets)
         self._update_config_section("recording", {"last_session_file": file_path})
+        self._runtime_metrics.record_event(
+            f"Replay loaded: {file_path} ({len(packets)} packets)"
+        )
+        self._refresh_runtime_metrics_view()
         self.main_window.status_bar.set_hint(f"Loaded {len(packets)} packet(s) from {file_path}. Use Play Replay to start.")
 
     def _play_replay(self) -> None:
@@ -353,6 +372,10 @@ class AppController(QObject):
         self.main_window.status_bar.set_hint(
             f"Replay started at {self._replay_controller.speed:.1f}x speed."
         )
+        self._runtime_metrics.record_event(
+            f"Replay started at {self._replay_controller.speed:.1f}x"
+        )
+        self._refresh_runtime_metrics_view()
         self._replay_controller.play()
 
     def _pause_replay(self) -> None:
@@ -360,6 +383,8 @@ class AppController(QObject):
             self.main_window.status_bar.set_hint("Replay is not currently playing.")
             return
         self._replay_controller.pause()
+        self._runtime_metrics.record_event("Replay paused")
+        self._refresh_runtime_metrics_view()
         self.main_window.status_bar.set_hint("Replay paused.")
 
     def _stop_replay(self) -> None:
@@ -368,6 +393,8 @@ class AppController(QObject):
             return
         self._replay_controller.stop()
         self._prepare_replay_view()
+        self._runtime_metrics.record_event("Replay stopped and reset")
+        self._refresh_runtime_metrics_view()
         self.main_window.status_bar.set_hint("Replay stopped and reset.")
 
     def _restart_replay(self) -> None:
@@ -376,6 +403,8 @@ class AppController(QObject):
             return
         self._prepare_replay_view()
         self._replay_controller.restart()
+        self._runtime_metrics.record_event("Replay restarted")
+        self._refresh_runtime_metrics_view()
         self.main_window.status_bar.set_hint("Replay restarted.")
 
     def _step_replay(self) -> None:
@@ -383,14 +412,20 @@ class AppController(QObject):
             self.main_window.status_bar.set_hint("No replay session loaded.")
             return
         self._replay_controller.step()
+        self._runtime_metrics.record_event("Replay stepped by one packet")
+        self._refresh_runtime_metrics_view()
         self.main_window.status_bar.set_hint("Replay stepped by one packet.")
 
     def _set_replay_speed(self, speed: float) -> None:
         self._replay_controller.set_speed(speed)
         self._update_config_section("recording", {"replay_speed": speed})
+        self._runtime_metrics.record_event(f"Replay speed set to {speed:.1f}x")
+        self._refresh_runtime_metrics_view()
         self.main_window.status_bar.set_hint(f"Replay speed set to {speed:.1f}x.")
 
     def _on_replay_finished(self) -> None:
+        self._runtime_metrics.record_event("Replay finished")
+        self._refresh_runtime_metrics_view()
         self.main_window.status_bar.set_hint("Replay finished.")
 
     def _on_replay_progress_changed(self, current: int, total: int, speed: float) -> None:
@@ -408,6 +443,7 @@ class AppController(QObject):
 
     def _reset_runtime_metrics(self) -> None:
         self._runtime_metrics.reset()
+        self._runtime_metrics.record_event("Diagnostics counters cleared")
         self._refresh_runtime_metrics_view()
         self.main_window.status_bar.set_hint("Diagnostics counters cleared.")
 

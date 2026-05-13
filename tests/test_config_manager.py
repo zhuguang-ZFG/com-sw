@@ -93,3 +93,9 @@ class TestConfigManager:
         tmp_config.load()
         tmp_config.set("display", "terminal_mode", "hex")
         assert tmp_config.get("display", "terminal_mode") == "hex"
+
+    def test_snapshot_returns_detached_copy(self, tmp_config):
+        tmp_config.load()
+        snap = tmp_config.snapshot()
+        snap["display"]["terminal_mode"] = "hex"
+        assert tmp_config.get("display", "terminal_mode") == "ascii"

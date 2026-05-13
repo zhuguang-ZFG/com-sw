@@ -148,6 +148,10 @@ class ConfigManager:
                 return default
         return node
 
+    def snapshot(self) -> Dict[str, Any]:
+        """Return a deep-copied view of the current configuration state."""
+        return deepcopy(self._config)
+
     def set(self, *keys_and_value: Any) -> None:
         """Set a nested config value by key path.
 

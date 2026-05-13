@@ -10,7 +10,7 @@ Wires together all components:
 
 import logging
 from pathlib import Path
-from typing import List
+from typing import Any, List
 
 from PySide6.QtCore import QObject, Qt, QTimer
 from PySide6.QtWidgets import QMessageBox, QFileDialog
@@ -26,6 +26,7 @@ from src.controllers.session_replay_controller import SessionReplayController
 from src.controllers.session_recorder import SessionRecorder, load_session
 from src.models.data_packet import DataPacket
 from src.models.port_config import PortConfig
+from src.models.runtime_metrics import RuntimeMetrics
 from src.serial.ring_buffer import RingBuffer
 from src.serial.port_manager import PortManager
 from src.serial.port_enumerator import PortEnumerator
@@ -69,6 +70,7 @@ class AppController(QObject):
         self._session_recorder = SessionRecorder()
         self._replay_controller = SessionReplayController(self._on_data_received, self)
         self._modbus_pairing = ModbusPairingTracker()
+        self._runtime_metrics = RuntimeMetrics()
 
         # Wire everything
         self._wire_signals()
@@ -97,12 +99,13 @@ class AppController(QObject):
 
         # === Data pump -> Views ===
         self._data_pump.data_ready.connect(self._on_data_received)
+        self._data_pump.backlog_detected.connect(self._on_backlog_detected)
 
         # === UI controls ===
         self.main_window.connect_button.clicked.connect(self._on_connect_clicked)
         self.main_window.disconnect_button.clicked.connect(self._on_disconnect_clicked)
         self.main_window.config_button.clicked.connect(
-            lambda: self.main_window._on_port_config()
+            self.main_window.port_config_requested.emit
         )
         self.main_window.port_config_requested.connect(self._open_port_config_dialog)
         self.main_window.preferences_requested.connect(self._open_preferences_dialog)
@@ -116,6 +119,9 @@ class AppController(QObject):
         self.main_window.replay_restart_requested.connect(self._restart_replay)
         self.main_window.replay_step_requested.connect(self._step_replay)
         self.main_window.replay_speed_requested.connect(self._set_replay_speed)
+        self.main_window.diagnostics_view.clear_button.clicked.connect(
+            self._reset_runtime_metrics
+        )
         self._replay_controller.finished.connect(self._on_replay_finished)
         self._replay_controller.progress_changed.connect(self._on_replay_progress_changed)
 
@@ -168,6 +174,7 @@ class AppController(QObject):
         if config:
             self.main_window.status_bar.set_connected(port_name, config.settings_str)
         self.main_window.set_connected_ui(True)
+        self.main_window.status_bar.clear_buffer_warning()
         self.main_window.status_bar.set_hint(f"Connected to {port_name}.")
 
         # Save last port
@@ -178,6 +185,7 @@ class AppController(QObject):
         """Port closed."""
         self._is_connected = False
         self.main_window.status_bar.set_disconnected()
+        self.main_window.status_bar.clear_buffer_warning()
         self.main_window.set_connected_ui(False)
         self.main_window.status_bar.set_hint(f"Disconnected from {port_name}.")
 
@@ -191,6 +199,10 @@ class AppController(QObject):
         """Data pumped from the ring buffer 鈥?route to all views."""
         if not packets:
             return
+
+        self.main_window.status_bar.clear_buffer_warning()
+        self._runtime_metrics.record_packets(packets)
+        self._refresh_runtime_metrics_view()
 
         # Route to each view
         self.main_window.terminal_view.append_packets(packets)
@@ -212,6 +224,19 @@ class AppController(QObject):
             self._session_recorder.record_packets(packets)
         self._update_modbus_hint(packets)
 
+    def _on_backlog_detected(self, dropped_packets: int) -> None:
+        """Reflect ring-buffer overflow in the UI."""
+        self._runtime_metrics.record_dropped_packets(dropped_packets)
+        self._refresh_runtime_metrics_view()
+        self.main_window.status_bar.set_buffer_warning(dropped_packets)
+
+    def _update_config_section(self, section: str, values: dict[str, Any], save: bool = True) -> None:
+        """Apply multiple values into one config section."""
+        for key, value in values.items():
+            self._config.set(section, key, value)
+        if save:
+            self._config.save()
+
     # ---- Export -------------------------------------------------------------------
 
     def _on_modbus_send(self, slave_id: int, func_code: int, data: bytes) -> None:
@@ -229,15 +254,19 @@ class AppController(QObject):
         dialog.set_config(self._config.get("port", default={}))
         if dialog.exec():
             config = dialog.get_config()
-            self._config.set("port", "last_port", config["port"])
-            self._config.set("port", "last_baudrate", config["baudrate"])
-            self._config.set("port", "last_bytesize", config["bytesize"])
-            self._config.set("port", "last_stopbits", config["stopbits"])
-            self._config.set("port", "last_parity", config["parity"])
-            self._config.set("port", "last_flow_control", config["flow_control"])
-            self._config.set("port", "dtr_on_connect", config["dtr"])
-            self._config.set("port", "rts_on_connect", config["rts"])
-            self._config.save()
+            self._update_config_section(
+                "port",
+                {
+                    "last_port": config["port"],
+                    "last_baudrate": config["baudrate"],
+                    "last_bytesize": config["bytesize"],
+                    "last_stopbits": config["stopbits"],
+                    "last_parity": config["parity"],
+                    "last_flow_control": config["flow_control"],
+                    "dtr_on_connect": config["dtr"],
+                    "rts_on_connect": config["rts"],
+                },
+            )
             self.main_window.port_combo.setEditText(config["port"])
             self.main_window.baud_combo.setCurrentText(str(config["baudrate"]))
             self.main_window.status_bar.set_hint("Port settings saved.")
@@ -246,14 +275,11 @@ class AppController(QObject):
         from src.views.preferences_dialog import PreferencesDialog
 
         dialog = PreferencesDialog(self.main_window)
-        dialog.set_preferences(self._config.load())
+        dialog.set_preferences(self._config.snapshot())
         if dialog.exec():
             prefs = dialog.get_preferences()
-            for key, value in prefs["display"].items():
-                self._config.set("display", key, value)
-            for key, value in prefs["port"].items():
-                self._config.set("port", key, value)
-            self._config.save()
+            self._update_config_section("display", prefs["display"], save=False)
+            self._update_config_section("port", prefs["port"])
             self._apply_config_to_ui()
             self.main_window.status_bar.set_hint("Preferences saved.")
 
@@ -266,11 +292,15 @@ class AppController(QObject):
         dialog.set_export_config(export_config)
         if dialog.exec():
             export = dialog.get_export_config()
-            self._config.set("export", "format", export["format"])
-            self._config.set("export", "include_timestamps", export["include_timestamps"])
-            self._config.set("export", "include_direction", export["include_direction"])
-            self._config.set("export", "append_mode", export["append_mode"])
-            self._config.save()
+            self._update_config_section(
+                "export",
+                {
+                    "format": export["format"],
+                    "include_timestamps": export["include_timestamps"],
+                    "include_direction": export["include_direction"],
+                    "append_mode": export["append_mode"],
+                },
+            )
             self.start_export(export["file_path"], export["format"])
             self.main_window.status_bar.set_hint(f"Exporting to {export['file_path']}")
 
@@ -287,8 +317,7 @@ class AppController(QObject):
         if not file_path:
             return
         self._session_recorder.start(file_path)
-        self._config.set("recording", "last_session_file", file_path)
-        self._config.save()
+        self._update_config_section("recording", {"last_session_file": file_path})
         self.main_window.status_bar.set_hint(f"Recording session to {file_path}")
 
     def _stop_recording(self) -> None:
@@ -312,8 +341,7 @@ class AppController(QObject):
         packets = load_session(file_path)
         self._prepare_replay_view()
         self._replay_controller.load(packets)
-        self._config.set("recording", "last_session_file", file_path)
-        self._config.save()
+        self._update_config_section("recording", {"last_session_file": file_path})
         self.main_window.status_bar.set_hint(f"Loaded {len(packets)} packet(s) from {file_path}. Use Play Replay to start.")
 
     def _play_replay(self) -> None:
@@ -357,20 +385,29 @@ class AppController(QObject):
 
     def _set_replay_speed(self, speed: float) -> None:
         self._replay_controller.set_speed(speed)
-        self._config.set("recording", "replay_speed", speed)
-        self._config.save()
+        self._update_config_section("recording", {"replay_speed": speed})
         self.main_window.status_bar.set_hint(f"Replay speed set to {speed:.1f}x.")
 
     def _on_replay_finished(self) -> None:
         self.main_window.status_bar.set_hint("Replay finished.")
 
     def _on_replay_progress_changed(self, current: int, total: int, speed: float) -> None:
+        self._runtime_metrics.set_replay_state(current, total, speed)
+        self._refresh_runtime_metrics_view()
         self.main_window.status_bar.set_replay_status(
             current,
             total,
             speed,
             self._replay_controller.is_playing,
         )
+
+    def _refresh_runtime_metrics_view(self) -> None:
+        self.main_window.diagnostics_view.set_metrics(self._runtime_metrics.snapshot())
+
+    def _reset_runtime_metrics(self) -> None:
+        self._runtime_metrics.reset()
+        self._refresh_runtime_metrics_view()
+        self.main_window.status_bar.set_hint("Diagnostics counters cleared.")
 
     def _prepare_replay_view(self) -> None:
         self.main_window.terminal_view.clear()
@@ -531,14 +568,21 @@ class AppController(QObject):
         if self._is_connected:
             self._port_manager.close()
         modbus_analysis_state = self.main_window.modbus_analysis_view.get_filter_state()
-        self._config.set("modbus_analysis", "exceptions_only", modbus_analysis_state["exceptions_only"])
-        self._config.set("modbus_analysis", "paired_only", modbus_analysis_state["paired_only"])
-        self._config.set("modbus_analysis", "slave_filter", modbus_analysis_state["slave_filter"])
-        self._config.set("modbus_analysis", "function_filter", modbus_analysis_state["function_filter"])
-        self._config.set("modbus_analysis", "search_filter", modbus_analysis_state["search_filter"])
-        self._config.set("window", "geometry",
-                         bytes(self.main_window.saveGeometry()).hex())
-        self._config.save()
+        self._update_config_section(
+            "modbus_analysis",
+            {
+                "exceptions_only": modbus_analysis_state["exceptions_only"],
+                "paired_only": modbus_analysis_state["paired_only"],
+                "slave_filter": modbus_analysis_state["slave_filter"],
+                "function_filter": modbus_analysis_state["function_filter"],
+                "search_filter": modbus_analysis_state["search_filter"],
+            },
+            save=False,
+        )
+        self._update_config_section(
+            "window",
+            {"geometry": bytes(self.main_window.saveGeometry()).hex()},
+        )
 
     def _restore_window_state(self) -> None:
         """Restore window geometry from config."""

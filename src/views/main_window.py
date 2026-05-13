@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from src.models.port_config import PortConfig
 from src.views.dump_view import DumpView
+from src.views.diagnostics_view import DiagnosticsView
 from src.views.line_view import LineView
 from src.views.modbus_analysis_view import ModbusAnalysisView
 from src.views.modbus_panel import ModbusPanel
@@ -72,6 +73,13 @@ class MainWindow(QMainWindow):
         self._modbus_analysis_dock.setWidget(self._modbus_analysis_view)
         self._modbus_analysis_dock.setVisible(False)
         self.addDockWidget(Qt.BottomDockWidgetArea, self._modbus_analysis_dock)
+
+        self._diagnostics_view = DiagnosticsView()
+        self._diagnostics_dock = QDockWidget("Diagnostics", self)
+        self._diagnostics_dock.setObjectName("diagnostics_dock")
+        self._diagnostics_dock.setWidget(self._diagnostics_view)
+        self._diagnostics_dock.setVisible(False)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self._diagnostics_dock)
 
         self._status_bar = StatusBar()
         self.setStatusBar(self._status_bar)
@@ -222,6 +230,16 @@ class MainWindow(QMainWindow):
             self._modbus_analysis_action.setChecked
         )
 
+        self._diagnostics_action = QAction("Diagnostics", self)
+        self._diagnostics_action.setCheckable(True)
+        self._diagnostics_action.triggered.connect(
+            lambda checked: self._diagnostics_dock.setVisible(checked)
+        )
+        view_menu.addAction(self._diagnostics_action)
+        self._diagnostics_dock.visibilityChanged.connect(
+            self._diagnostics_action.setChecked
+        )
+
         view_menu.addSeparator()
 
         clear_action = QAction("Clear Current View", self)
@@ -269,6 +287,10 @@ class MainWindow(QMainWindow):
     @property
     def modbus_analysis_view(self) -> ModbusAnalysisView:
         return self._modbus_analysis_view
+
+    @property
+    def diagnostics_view(self) -> DiagnosticsView:
+        return self._diagnostics_view
 
     @property
     def status_bar(self) -> StatusBar:

@@ -17,10 +17,12 @@ class StatusBar(QStatusBar):
         self._tx_label = QLabel("TX: 0 B")
         self._rx_label = QLabel("RX: 0 B")
         self._replay_label = QLabel("")
+        self._buffer_label = QLabel("")
 
         self.addPermanentWidget(self._port_label)
         self.addPermanentWidget(self._tx_label)
         self.addPermanentWidget(self._rx_label)
+        self.addPermanentWidget(self._buffer_label)
         self.addPermanentWidget(self._replay_label)
 
         self._rx_count = 0
@@ -69,6 +71,16 @@ class StatusBar(QStatusBar):
 
     def clear_replay_status(self) -> None:
         self._replay_label.setText("")
+
+    def set_buffer_warning(self, dropped_packets: int) -> None:
+        self._buffer_label.setText(f"Dropped: {dropped_packets}")
+        self.showMessage(
+            f"Input backlog detected; dropped {dropped_packets} buffered packet(s).",
+            5000,
+        )
+
+    def clear_buffer_warning(self) -> None:
+        self._buffer_label.setText("")
 
     def _update_counters(self) -> None:
         self._rx_label.setText(f"RX: {self._rx_count:,} B")

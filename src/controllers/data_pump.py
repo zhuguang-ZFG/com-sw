@@ -22,6 +22,7 @@ class DataPump(QObject):
     """
 
     data_ready = Signal(list)  # List[DataPacket]
+    backlog_detected = Signal(int)
 
     def __init__(self, ring_buffer: RingBuffer, interval_ms: int = 50, parent=None):
         super().__init__(parent)
@@ -45,6 +46,9 @@ class DataPump(QObject):
 
     def _pump(self) -> None:
         """Drain the ring buffer and emit pending packets."""
+        overflow_count = self._ring_buffer.overflow_count
+        if overflow_count:
+            self.backlog_detected.emit(overflow_count)
         packets = self._ring_buffer.drain()
         if packets:
             self.data_ready.emit(packets)
